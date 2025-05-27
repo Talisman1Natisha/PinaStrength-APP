@@ -7,23 +7,41 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		05AE519F2DE551C300000679 /* PastWorkoutDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AE519E2DE551C200000679 /* PastWorkoutDetailView.swift */; };
+		05AE51A12DE556F500000679 /* CreateEditRoutineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AE51A02DE556F400000679 /* CreateEditRoutineView.swift */; };
+		05D556E72DE39D1C00EE6235 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 05D556E62DE39D1C00EE6235 /* Auth */; };
+		05D556E92DE39D1C00EE6235 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 05D556E82DE39D1C00EE6235 /* Functions */; };
+		05D556EB2DE39D1C00EE6235 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 05D556EA2DE39D1C00EE6235 /* PostgREST */; };
+		05D556ED2DE39D1C00EE6235 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = 05D556EC2DE39D1C00EE6235 /* Realtime */; };
+		05D556EF2DE39D1C00EE6235 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 05D556EE2DE39D1C00EE6235 /* Storage */; };
+		05D556F12DE39D1C00EE6235 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 05D556F02DE39D1C00EE6235 /* Supabase */; };
+		05D556F32DE39DA100EE6235 /* SupabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D556F22DE39DA100EE6235 /* SupabaseManager.swift */; };
+		05D556F52DE3A6D300EE6235 /* WorkoutLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D556F42DE3A6D300EE6235 /* WorkoutLogger.swift */; };
+		05D556F72DE3B96700EE6235 /* LogWorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D556F62DE3B96700EE6235 /* LogWorkoutView.swift */; };
+		05D556F92DE4E27B00EE6235 /* ExercisesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D556F82DE4E27B00EE6235 /* ExercisesView.swift */; };
+		05D556FB2DE4EB6500EE6235 /* ExerciseDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D556FA2DE4EB6500EE6235 /* ExerciseDetailView.swift */; };
 		CE479B752DE38C5000A43FD2 /* PinaStrengthApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE479B742DE38C5000A43FD2 /* PinaStrengthApp.swift */; };
 		CE479B772DE38C5000A43FD2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE479B762DE38C5000A43FD2 /* ContentView.swift */; };
 		CE479B792DE38C5200A43FD2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CE479B782DE38C5200A43FD2 /* Assets.xcassets */; };
 		CE479B7C2DE38C5200A43FD2 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CE479B7B2DE38C5200A43FD2 /* Preview Assets.xcassets */; };
-		CE479B832DE38CD700A43FD2 /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE479B822DE38CD700A43FD2 /* LogView.swift */; };
 		CE479B852DE38D8600A43FD2 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE479B842DE38D8600A43FD2 /* HistoryView.swift */; };
 		CE479B872DE38DAE00A43FD2 /* RoutinesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE479B862DE38DAE00A43FD2 /* RoutinesView.swift */; };
 		CE479B892DE38DBB00A43FD2 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE479B882DE38DBB00A43FD2 /* ProfileView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		05AE519E2DE551C200000679 /* PastWorkoutDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastWorkoutDetailView.swift; sourceTree = "<group>"; };
+		05AE51A02DE556F400000679 /* CreateEditRoutineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateEditRoutineView.swift; sourceTree = "<group>"; };
+		05D556F22DE39DA100EE6235 /* SupabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseManager.swift; sourceTree = "<group>"; };
+		05D556F42DE3A6D300EE6235 /* WorkoutLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLogger.swift; sourceTree = "<group>"; };
+		05D556F62DE3B96700EE6235 /* LogWorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogWorkoutView.swift; sourceTree = "<group>"; };
+		05D556F82DE4E27B00EE6235 /* ExercisesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExercisesView.swift; sourceTree = "<group>"; };
+		05D556FA2DE4EB6500EE6235 /* ExerciseDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseDetailView.swift; sourceTree = "<group>"; };
 		CE479B712DE38C5000A43FD2 /* PinaStrength.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PinaStrength.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CE479B742DE38C5000A43FD2 /* PinaStrengthApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinaStrengthApp.swift; sourceTree = "<group>"; };
 		CE479B762DE38C5000A43FD2 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		CE479B782DE38C5200A43FD2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CE479B7B2DE38C5200A43FD2 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
-		CE479B822DE38CD700A43FD2 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
 		CE479B842DE38D8600A43FD2 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		CE479B862DE38DAE00A43FD2 /* RoutinesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutinesView.swift; sourceTree = "<group>"; };
 		CE479B882DE38DBB00A43FD2 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
@@ -34,6 +52,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				05D556EB2DE39D1C00EE6235 /* PostgREST in Frameworks */,
+				05D556E92DE39D1C00EE6235 /* Functions in Frameworks */,
+				05D556F12DE39D1C00EE6235 /* Supabase in Frameworks */,
+				05D556E72DE39D1C00EE6235 /* Auth in Frameworks */,
+				05D556EF2DE39D1C00EE6235 /* Storage in Frameworks */,
+				05D556ED2DE39D1C00EE6235 /* Realtime in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -59,14 +83,20 @@
 		CE479B732DE38C5000A43FD2 /* PinaStrength */ = {
 			isa = PBXGroup;
 			children = (
+				05AE51A02DE556F400000679 /* CreateEditRoutineView.swift */,
+				05AE519E2DE551C200000679 /* PastWorkoutDetailView.swift */,
+				05D556FA2DE4EB6500EE6235 /* ExerciseDetailView.swift */,
+				05D556F82DE4E27B00EE6235 /* ExercisesView.swift */,
+				05D556F62DE3B96700EE6235 /* LogWorkoutView.swift */,
+				05D556F42DE3A6D300EE6235 /* WorkoutLogger.swift */,
 				CE479B742DE38C5000A43FD2 /* PinaStrengthApp.swift */,
 				CE479B762DE38C5000A43FD2 /* ContentView.swift */,
 				CE479B782DE38C5200A43FD2 /* Assets.xcassets */,
 				CE479B7A2DE38C5200A43FD2 /* Preview Content */,
-				CE479B822DE38CD700A43FD2 /* LogView.swift */,
 				CE479B842DE38D8600A43FD2 /* HistoryView.swift */,
 				CE479B862DE38DAE00A43FD2 /* RoutinesView.swift */,
 				CE479B882DE38DBB00A43FD2 /* ProfileView.swift */,
+				05D556F22DE39DA100EE6235 /* SupabaseManager.swift */,
 			);
 			path = PinaStrength;
 			sourceTree = "<group>";
@@ -123,6 +153,9 @@
 				Base,
 			);
 			mainGroup = CE479B682DE38C5000A43FD2;
+			packageReferences = (
+				05D556E52DE39D1C00EE6235 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			productRefGroup = CE479B722DE38C5000A43FD2 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -149,12 +182,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				05D556F92DE4E27B00EE6235 /* ExercisesView.swift in Sources */,
+				05AE51A12DE556F500000679 /* CreateEditRoutineView.swift in Sources */,
+				05D556FB2DE4EB6500EE6235 /* ExerciseDetailView.swift in Sources */,
 				CE479B772DE38C5000A43FD2 /* ContentView.swift in Sources */,
+				05D556F52DE3A6D300EE6235 /* WorkoutLogger.swift in Sources */,
 				CE479B852DE38D8600A43FD2 /* HistoryView.swift in Sources */,
-				CE479B832DE38CD700A43FD2 /* LogView.swift in Sources */,
 				CE479B872DE38DAE00A43FD2 /* RoutinesView.swift in Sources */,
+				05D556F72DE3B96700EE6235 /* LogWorkoutView.swift in Sources */,
 				CE479B892DE38DBB00A43FD2 /* ProfileView.swift in Sources */,
+				05AE519F2DE551C300000679 /* PastWorkoutDetailView.swift in Sources */,
 				CE479B752DE38C5000A43FD2 /* PinaStrengthApp.swift in Sources */,
+				05D556F32DE39DA100EE6235 /* SupabaseManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -357,6 +396,50 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		05D556E52DE39D1C00EE6235 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase-community/supabase-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		05D556E62DE39D1C00EE6235 /* Auth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05D556E52DE39D1C00EE6235 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Auth;
+		};
+		05D556E82DE39D1C00EE6235 /* Functions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05D556E52DE39D1C00EE6235 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Functions;
+		};
+		05D556EA2DE39D1C00EE6235 /* PostgREST */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05D556E52DE39D1C00EE6235 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = PostgREST;
+		};
+		05D556EC2DE39D1C00EE6235 /* Realtime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05D556E52DE39D1C00EE6235 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Realtime;
+		};
+		05D556EE2DE39D1C00EE6235 /* Storage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05D556E52DE39D1C00EE6235 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Storage;
+		};
+		05D556F02DE39D1C00EE6235 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05D556E52DE39D1C00EE6235 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = CE479B692DE38C5000A43FD2 /* Project object */;
 }

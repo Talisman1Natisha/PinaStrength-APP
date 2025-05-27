@@ -11,7 +11,7 @@ struct ContentView: View {
     var body: some View {
         TabView {
             NavigationStack {
-                LogView()
+                LogWorkoutView()
             }
             .tabItem {
                 Label("Log", systemImage: "plus.circle")
@@ -29,6 +29,13 @@ struct ContentView: View {
             }
             .tabItem {
                 Label("Routines", systemImage: "list.bullet")
+            }
+
+            NavigationStack {
+                ExercisesView()
+            }
+            .tabItem {
+                Label("Exercises", systemImage: "figure.strengthtraining.traditional")
             }
 
             NavigationStack {
