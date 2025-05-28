@@ -7,57 +7,69 @@ struct CustomKeyboardView: View {
     var onIncrement: () -> Void
     var onDecrement: () -> Void
 
-    private let numberKeyColumns: [GridItem] = Array(repeating: .init(.flexible(), spacing: 6), count: 3)
-    private let keySpacing: CGFloat = 6
-    private let buttonHeight: CGFloat = 50 // Adjusted button height
-    private let keyboardWidthFraction: CGFloat = 0.95 // Use 95% of screen width
+    private let columns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
+    private let buttonHeight: CGFloat = 54
 
     var body: some View {
-        VStack(spacing: 0) { // Main container for the keyboard, no internal padding here
-            HStack(alignment: .top, spacing: keySpacing) {
-                // Left Side: Number Pad
-                VStack(spacing: keySpacing) {
-                    LazyVGrid(columns: numberKeyColumns, spacing: keySpacing) {
-                        ForEach(1...9, id: \.self) { number in
-                            NumberButton(value: String(number), height: buttonHeight, action: { appendCharacter(String(number)) })
+        KeyboardPlateView {
+            HStack(spacing: 8) {
+                // Left side: Number grid
+                LazyVGrid(columns: columns, spacing: 8) {
+                    // Numbers 1-9
+                    ForEach(1...9, id: \.self) { number in
+                        KeyButton(label: String(number)) {
+                            appendCharacter(String(number))
                         }
-
-                        if isDecimalAllowed {
-                            NumberButton(value: ".", height: buttonHeight, action: { appendCharacter(".") })
-                        } else {
-                            Spacer().frame(height: buttonHeight) // Maintain layout
+                    }
+                    
+                    // Bottom row: decimal/empty, 0, delete
+                    if isDecimalAllowed {
+                        KeyButton(label: ".") {
+                            appendCharacter(".")
                         }
-                        
-                        NumberButton(value: "0", height: buttonHeight, action: { appendCharacter("0") })
-                        
-                        UtilityButton(systemImage: "delete.left.fill", height: buttonHeight, action: { text = String(text.dropLast()) })
+                    } else {
+                        Color.clear
+                            .frame(height: buttonHeight)
+                    }
+                    
+                    KeyButton(label: "0") {
+                        appendCharacter("0")
+                    }
+                    
+                    KeyButton(systemImage: "delete.left.fill") {
+                        if !text.isEmpty {
+                            text.removeLast()
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity)
-
-                // Right Side: Action Buttons
-                VStack(spacing: keySpacing) {
-                    UtilityButton(systemImage: "plus.circle.fill", height: buttonHeight, action: onIncrement)
-                    UtilityButton(systemImage: "minus.circle.fill", height: buttonHeight, action: onDecrement)
+                
+                // Right side: Action buttons
+                VStack(spacing: 8) {
+                    KeyButton(systemImage: "plus.circle.fill") {
+                        onIncrement()
+                    }
+                    
+                    KeyButton(systemImage: "minus.circle.fill") {
+                        onDecrement()
+                    }
                     
                     Button(action: onNextAction) {
                         Text("Next")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity, minHeight: buttonHeight * 2 + keySpacing) // Span two rows height
-                            .background(Color.blue)
+                            .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(.white)
-                            .cornerRadius(8)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
+                    .frame(height: buttonHeight * 2 + 8) // Spans 2 rows
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.blue))
                 }
-                .frame(width: 80) // Fixed width for the action button column
+                .frame(width: 90)
             }
-            .padding(keySpacing) // Padding around the Hstack
         }
-        .frame(height: (buttonHeight * 4) + (keySpacing * 4) + 5) // Calculated height: 4 rows + spacing
-        .frame(width: UIScreen.main.bounds.width * keyboardWidthFraction)
-        .background(Color(UIColor.systemGray4).opacity(0.9)) // Slightly transparent dark gray background
-        .cornerRadius(10)
     }
 
     private func appendCharacter(_ character: String) {
@@ -68,53 +80,55 @@ struct CustomKeyboardView: View {
     }
 }
 
-// Reusable Button Styles
-struct NumberButton: View {
-    let value: String
-    let height: CGFloat
+// Reusable key button component
+private struct KeyButton: View {
+    let label: String?
+    let systemImage: String?
     let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(value)
-                .font(.title2)
-                .fontWeight(.medium)
-                .frame(maxWidth: .infinity, minHeight: height)
-                .background(Color.gray.opacity(0.35))
-                .foregroundColor(Color(UIColor.label))
-                .cornerRadius(8)
-        }
+    
+    init(label: String, action: @escaping () -> Void) {
+        self.label = label
+        self.systemImage = nil
+        self.action = action
     }
-}
-
-struct UtilityButton: View {
-    let systemImage: String
-    let height: CGFloat
-    let action: () -> Void
-
+    
+    init(systemImage: String, action: @escaping () -> Void) {
+        self.label = nil
+        self.systemImage = systemImage
+        self.action = action
+    }
+    
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.title2)
-                .frame(maxWidth: .infinity, minHeight: height)
-                .background(Color.gray.opacity(0.5))
-                .foregroundColor(Color(UIColor.label))
-                .cornerRadius(8)
+            Group {
+                if let label = label {
+                    Text(label)
+                        .font(.system(size: 22, weight: .medium))
+                } else if let systemImage = systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 20, weight: .medium))
+                }
+            }
+            .foregroundColor(.primary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(height: 54)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color(.secondarySystemBackground)))
     }
 }
 
 struct CustomKeyboardView_Previews: PreviewProvider {
     static var previews: some View {
         VStack {
-            Text("Sample Text: 123.45").padding()
             Spacer()
-            CustomKeyboardView(text: .constant("123.45"), 
-                             isDecimalAllowed: true, 
-                             onNextAction: { print("Next/Done Tapped") },
-                             onIncrement: { print("Increment") },
-                             onDecrement: { print("Decrement") })
+            CustomKeyboardView(
+                text: .constant("123.45"), 
+                isDecimalAllowed: true, 
+                onNextAction: { print("Next/Done Tapped") },
+                onIncrement: { print("Increment") },
+                onDecrement: { print("Decrement") }
+            )
         }
-        .background(Color.gray) // Add a background to the preview container for contrast
+        .background(Color.gray)
     }
 } 
