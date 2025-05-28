@@ -9,6 +9,11 @@
 /* Begin PBXBuildFile section */
 		05AE519F2DE551C300000679 /* PastWorkoutDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AE519E2DE551C200000679 /* PastWorkoutDetailView.swift */; };
 		05AE51A12DE556F500000679 /* CreateEditRoutineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AE51A02DE556F400000679 /* CreateEditRoutineView.swift */; };
+		05AE51A32DE61E1400000679 /* RoutineDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AE51A22DE61E1400000679 /* RoutineDetailView.swift */; };
+		05AE51A52DE6236300000679 /* TabSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AE51A42DE6236300000679 /* TabSelection.swift */; };
+		05AE51A72DE6237000000679 /* WorkoutStarterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AE51A62DE6237000000679 /* WorkoutStarterService.swift */; };
+		05AE51A92DE6300200000679 /* CustomKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AE51A82DE6300200000679 /* CustomKeyboardView.swift */; };
+		05AE51AB2DE6409C00000679 /* ActiveWorkoutSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AE51AA2DE6409C00000679 /* ActiveWorkoutSessionView.swift */; };
 		05D556E72DE39D1C00EE6235 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 05D556E62DE39D1C00EE6235 /* Auth */; };
 		05D556E92DE39D1C00EE6235 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 05D556E82DE39D1C00EE6235 /* Functions */; };
 		05D556EB2DE39D1C00EE6235 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 05D556EA2DE39D1C00EE6235 /* PostgREST */; };
@@ -32,6 +37,11 @@
 /* Begin PBXFileReference section */
 		05AE519E2DE551C200000679 /* PastWorkoutDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastWorkoutDetailView.swift; sourceTree = "<group>"; };
 		05AE51A02DE556F400000679 /* CreateEditRoutineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateEditRoutineView.swift; sourceTree = "<group>"; };
+		05AE51A22DE61E1400000679 /* RoutineDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutineDetailView.swift; sourceTree = "<group>"; };
+		05AE51A42DE6236300000679 /* TabSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabSelection.swift; sourceTree = "<group>"; };
+		05AE51A62DE6237000000679 /* WorkoutStarterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutStarterService.swift; sourceTree = "<group>"; };
+		05AE51A82DE6300200000679 /* CustomKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomKeyboardView.swift; sourceTree = "<group>"; };
+		05AE51AA2DE6409C00000679 /* ActiveWorkoutSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveWorkoutSessionView.swift; sourceTree = "<group>"; };
 		05D556F22DE39DA100EE6235 /* SupabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseManager.swift; sourceTree = "<group>"; };
 		05D556F42DE3A6D300EE6235 /* WorkoutLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLogger.swift; sourceTree = "<group>"; };
 		05D556F62DE3B96700EE6235 /* LogWorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogWorkoutView.swift; sourceTree = "<group>"; };
@@ -83,6 +93,11 @@
 		CE479B732DE38C5000A43FD2 /* PinaStrength */ = {
 			isa = PBXGroup;
 			children = (
+				05AE51AA2DE6409C00000679 /* ActiveWorkoutSessionView.swift */,
+				05AE51A82DE6300200000679 /* CustomKeyboardView.swift */,
+				05AE51A62DE6237000000679 /* WorkoutStarterService.swift */,
+				05AE51A42DE6236300000679 /* TabSelection.swift */,
+				05AE51A22DE61E1400000679 /* RoutineDetailView.swift */,
 				05AE51A02DE556F400000679 /* CreateEditRoutineView.swift */,
 				05AE519E2DE551C200000679 /* PastWorkoutDetailView.swift */,
 				05D556FA2DE4EB6500EE6235 /* ExerciseDetailView.swift */,
@@ -182,17 +197,22 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				05AE51A32DE61E1400000679 /* RoutineDetailView.swift in Sources */,
 				05D556F92DE4E27B00EE6235 /* ExercisesView.swift in Sources */,
 				05AE51A12DE556F500000679 /* CreateEditRoutineView.swift in Sources */,
 				05D556FB2DE4EB6500EE6235 /* ExerciseDetailView.swift in Sources */,
+				05AE51AB2DE6409C00000679 /* ActiveWorkoutSessionView.swift in Sources */,
 				CE479B772DE38C5000A43FD2 /* ContentView.swift in Sources */,
 				05D556F52DE3A6D300EE6235 /* WorkoutLogger.swift in Sources */,
 				CE479B852DE38D8600A43FD2 /* HistoryView.swift in Sources */,
 				CE479B872DE38DAE00A43FD2 /* RoutinesView.swift in Sources */,
 				05D556F72DE3B96700EE6235 /* LogWorkoutView.swift in Sources */,
 				CE479B892DE38DBB00A43FD2 /* ProfileView.swift in Sources */,
+				05AE51A92DE6300200000679 /* CustomKeyboardView.swift in Sources */,
+				05AE51A52DE6236300000679 /* TabSelection.swift in Sources */,
 				05AE519F2DE551C300000679 /* PastWorkoutDetailView.swift in Sources */,
 				CE479B752DE38C5000A43FD2 /* PinaStrengthApp.swift in Sources */,
+				05AE51A72DE6237000000679 /* WorkoutStarterService.swift in Sources */,
 				05D556F32DE39DA100EE6235 /* SupabaseManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

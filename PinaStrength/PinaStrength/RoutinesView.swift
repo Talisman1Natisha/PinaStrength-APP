@@ -30,13 +30,12 @@ struct RoutinesView: View {
     @State private var isLoading: Bool = true
     @State private var errorMessage: String? = nil
     @State private var showingCreateRoutineView = false
-    // For future: state to show detail of a selected routine
-    // @State private var selectedRoutine: RoutineListItem? 
+    // No longer need selectedRoutine if using NavigationLink directly for detail
 
     private let client = SupabaseManager.shared.client
 
     var body: some View {
-        // NavigationStack is likely already provided by ContentView
+        // NavigationStack should be provided by ContentView
         VStack {
             if isLoading {
                 Spacer()
@@ -57,22 +56,15 @@ struct RoutinesView: View {
                 Spacer()
             } else {
                 List {
-                    ForEach(routines) {
-                        routine in
-                        Button(action: {
-                            // TODO: Show Routine Detail / Start Workout from Routine Modal
-                            print("Tapped on routine: \(routine.name)")
-                        }) {
+                    ForEach(routines) { routine in
+                        NavigationLink(destination: RoutineDetailView(routine: routine)) {
                             VStack(alignment: .leading) {
                                 Text(routine.name).font(.headline)
                                 Text("Last updated: \(routine.updatedAt, style: .relative) ago")
                                     .font(.caption).foregroundColor(.gray)
-                                // TODO: Maybe show a preview of exercises in the routine
                             }
                         }
-                        .buttonStyle(.plain)
                     }
-                    // TODO: Add .onDelete for user-created routines
                 }
             }
         }

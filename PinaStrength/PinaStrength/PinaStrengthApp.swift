@@ -9,6 +9,9 @@ import SwiftUI
 
 @main
 struct PinaStrengthApp: App {
+    @StateObject private var tabSelection = TabSelection()
+    @StateObject private var workoutStarterService = WorkoutStarterService()
+
     init() {
         Task {
             do {
@@ -23,7 +26,7 @@ struct PinaStrengthApp: App {
                 )
                 print("✅ Logged in with email: \(session.user.email ?? "unknown")")
             } catch {
-                print("❌ Login failed. LocalizedDescription: \(error.localizedDescription)")
+                print("❌ Login failed: \(error.localizedDescription)")
                 print("Full error details: \(error)") // This might give more info
             }
         }
@@ -32,6 +35,8 @@ struct PinaStrengthApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(tabSelection)
+                .environmentObject(workoutStarterService)
         }
     }
 }

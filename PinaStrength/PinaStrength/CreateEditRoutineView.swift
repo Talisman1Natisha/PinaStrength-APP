@@ -2,12 +2,28 @@ import SwiftUI
 import Supabase
 
 // MARK: - Data Model for Routine Set Template Input
-struct RoutineSetTemplateInput: Identifiable, Equatable {
-    let id = UUID() // For ForEach UI
-    var targetReps: String = ""    // e.g., "8-12", "10"
-    var targetWeight: String = "" // e.g., "Bodyweight", "Last", "-", or a number
-    var targetRestSeconds: String = "" // Optional, e.g., "60"
-    // No isCompleted here as it's a template
+struct RoutineSetTemplateInput: Identifiable, Equatable, Hashable, Decodable {
+    let id: UUID
+    var setNumber: Int?      
+    var targetReps: String?    // Changed to Optional
+    var targetWeight: String?  // Changed to Optional
+    var targetRestSeconds: String? // Changed to Optional
+
+    enum CodingKeys: String, CodingKey { 
+        case id 
+        case setNumber = "set_number"
+        case targetReps = "target_reps"
+        case targetWeight = "target_weight"
+        case targetRestSeconds = "target_rest_seconds"
+    }
+    
+    init(id: UUID = UUID(), setNumber: Int? = nil, targetReps: String? = nil, targetWeight: String? = nil, targetRestSeconds: String? = nil) {
+        self.id = id
+        self.setNumber = setNumber
+        self.targetReps = targetReps
+        self.targetWeight = targetWeight
+        self.targetRestSeconds = targetRestSeconds
+    }
 }
 
 // MARK: - New Subview for a single Set Template Input Row
@@ -24,9 +40,9 @@ struct RoutineSetTemplateInputRowView: View {
         self.setIndex = setIndex
         self.initialTemplate = template
         self.onSetTemplateChanged = onSetTemplateChanged
-        _localTargetWeight = State(initialValue: template.targetWeight)
-        _localTargetReps = State(initialValue: template.targetReps)
-        _localTargetRestSeconds = State(initialValue: template.targetRestSeconds)
+        _localTargetWeight = State(initialValue: template.targetWeight ?? "")
+        _localTargetReps = State(initialValue: template.targetReps ?? "")
+        _localTargetRestSeconds = State(initialValue: template.targetRestSeconds ?? "")
     }
 
     var body: some View {
@@ -46,18 +62,18 @@ struct RoutineSetTemplateInputRowView: View {
             // TODO: Add delete button for set template row
         }
         .padding(.vertical, 1)
-        .onChange(of: initialTemplate) { newTemplate in // Handles external changes if any
-            localTargetWeight = newTemplate.targetWeight
-            localTargetReps = newTemplate.targetReps
-            localTargetRestSeconds = newTemplate.targetRestSeconds
+        .onChange(of: initialTemplate) { newTemplate in 
+            localTargetWeight = newTemplate.targetWeight ?? ""
+            localTargetReps = newTemplate.targetReps ?? ""
+            localTargetRestSeconds = newTemplate.targetRestSeconds ?? ""
         }
     }
 
     private func reportChange() {
         var changedTemplate = initialTemplate
-        changedTemplate.targetWeight = localTargetWeight
-        changedTemplate.targetReps = localTargetReps
-        changedTemplate.targetRestSeconds = localTargetRestSeconds
+        changedTemplate.targetWeight = localTargetWeight.isEmpty ? nil : localTargetWeight
+        changedTemplate.targetReps = localTargetReps.isEmpty ? nil : localTargetReps
+        changedTemplate.targetRestSeconds = localTargetRestSeconds.isEmpty ? nil : localTargetRestSeconds
         onSetTemplateChanged(changedTemplate)
     }
 }
@@ -269,13 +285,13 @@ struct CreateEditRoutineView: View {
                         let target_reps: String?; let target_weight: String?; let target_rest_seconds: Int?
                     }
                     for (setIndex, template) in setTemplatesForExercise.enumerated() {
-                        let restSeconds = Int(template.targetRestSeconds)
+                        let restSeconds = Int(template.targetRestSeconds ?? "")
                         setToInsert.append(RoutineSetInsert(
                             routine_exercise_id: newRoutineExerciseDbId, 
                             user_id: userId, 
                             set_number: setIndex + 1, 
-                            target_reps: template.targetReps.isEmpty ? nil : template.targetReps, 
-                            target_weight: template.targetWeight.isEmpty ? nil : template.targetWeight,
+                            target_reps: template.targetReps?.isEmpty == true ? nil : template.targetReps, 
+                            target_weight: template.targetWeight?.isEmpty == true ? nil : template.targetWeight,
                             target_rest_seconds: restSeconds
                         ))
                     }

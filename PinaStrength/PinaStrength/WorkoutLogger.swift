@@ -2,17 +2,17 @@ import Foundation
 import Supabase
 
 // Helper struct to decode responses containing an ID
-private struct IdResponse: Decodable {
+struct IdResponse: Decodable {
     let id: UUID
 }
 
 // Payload structs for inserts
-private struct WorkoutInsertPayload: Encodable {
+struct WorkoutInsertPayload: Encodable {
     let user_id: UUID
     let notes: String // notes from function signature is String, not String?
 }
 
-private struct WorkoutExerciseInsertPayload: Encodable {
+struct WorkoutExerciseInsertPayload: Encodable {
     let workout_id: UUID
     let exercise_id: UUID
     let order_index: Int
@@ -20,13 +20,20 @@ private struct WorkoutExerciseInsertPayload: Encodable {
     // let notes: String? // workout_exercises table has an optional notes field
 }
 
-private struct WorkoutSetInsertPayload: Encodable {
+struct WorkoutSetInsertPayload: Encodable {
     let workout_exercise_id: UUID
     let set_number: Int
     let weight: Double
     let reps: Int
     let user_id: UUID
     let rest_seconds: Int? // This is optional
+}
+
+// Payload struct for workout updates (used by ActiveWorkoutSessionView)
+struct WorkoutUpdatePayload: Encodable {
+    let notes: String?
+    let end_time: Date?
+    // Add any other fields that can be updated for a workout
 }
 
 struct WorkoutLogger {
