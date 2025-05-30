@@ -1,113 +1,311 @@
 import SwiftUI
 import Supabase
 
-// MARK: - Data Model
+// MARK: - Modern Exercise Row View
 
-struct Exercise: Identifiable, Decodable, Hashable {
-    let id: UUID
-    let name: String
-    let bodyPart: String?
-    let category: String?
-    let equipment: String?
-    let instructions: String?
-    let createdByUser_id: UUID? // Field for user-created exercises
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case bodyPart = "body_part"
-        case category
-        case equipment
-        case instructions
-        case createdByUser_id = "created_by_user_id"
+struct ModernExerciseRow: View {
+    let exercise: Exercise
+    let isSelected: Bool
+    
+    private var iconName: String {
+        switch exercise.category?.lowercased() {
+        case "barbell": return "figure.strengthtraining.traditional"
+        case "dumbbell": return "dumbbell.fill"
+        case "cable": return "cable.connector"
+        case "machine": return "gearshape.fill"
+        case "bodyweight": return "figure.arms.open"
+        case "kettlebell": return "figure.strengthtraining.functional"
+        case "bands": return "bandage.fill"
+        default: return "figure.walk"
+        }
+    }
+    
+    private var categoryColor: Color {
+        switch exercise.category?.lowercased() {
+        case "barbell": return .blue
+        case "dumbbell": return .purple
+        case "cable": return .orange
+        case "machine": return .red
+        case "bodyweight": return .green
+        case "kettlebell": return .indigo
+        case "bands": return .pink
+        default: return .gray
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Image or Icon
+            ZStack {
+                if let imageUrl = exercise.imageUrl, !imageUrl.isEmpty {
+                    AsyncImage(url: URL(string: imageUrl)) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 50, height: 50)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } placeholder: {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(width: 50, height: 50)
+                            .overlay(
+                                ProgressView()
+                                    .scaleEffect(0.5)
+                            )
+                    }
+                } else {
+                    // Fallback to icon when no image
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(categoryColor.opacity(0.15))
+                        .frame(width: 50, height: 50)
+                        .overlay(
+                            Image(systemName: iconName)
+                                .font(.system(size: 22))
+                                .foregroundColor(categoryColor)
+                        )
+                }
+            }
+            
+            // Exercise info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(exercise.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                
+                HStack(spacing: 8) {
+                    if let bodyPart = exercise.bodyPart, !bodyPart.isEmpty {
+                        Label(bodyPart, systemImage: "figure.strengthtraining.traditional")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if let equipment = exercise.equipment, !equipment.isEmpty {
+                        Text("• \(equipment)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            // Selection indicator or chevron
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.blue)
+            } else {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray.opacity(0.5))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+        )
     }
 }
 
 // MARK: - Main Exercises View (Adapted for Selection)
 
 struct ExercisesView: View {
-    @Environment(\.dismiss) var dismiss // For dismissing the sheet/modal
-    var onSave: (([Exercise]) -> Void)? = nil // Optional: For returning selected exercises
-    var isSelectionMode: Bool { onSave != nil } // Determined by presence of onSave closure
+    @Environment(\.dismiss) var dismiss
+    var onSave: (([Exercise]) -> Void)? = nil
+    var isSelectionMode: Bool { onSave != nil }
 
     @State private var exercises: [Exercise] = []
     @State private var searchText: String = ""
-    @State private var selectedBodyPart: String? = nil
-    @State private var selectedCategory: String? = nil
+    @State private var selectedBodyPart: String = "All"
+    @State private var selectedCategory: String = "All"
     @State private var showCreateModal: Bool = false
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
     
-    @State private var currentlySelectedExercises: [Exercise] = [] // For multi-select in selection mode
-    @State private var selectedExerciseForDetail: Exercise? = nil // Re-add state for presenting ExerciseDetailView
+    @State private var currentlySelectedExercises: [Exercise] = []
+    @State private var presentedExercise: Exercise? = nil // For sheet presentation
 
     private let client = SupabaseManager.shared.client
-    private let bodyParts = ["All"] + ["Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Full Body", "Cardio", "Olympic", "Other"]
-    private let categories = ["All"] + ["Barbell", "Dumbbell", "Cable", "Machine", "Bodyweight", "Kettlebell", "Bands"]
+    private let bodyParts = ["All", "Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Full Body", "Cardio", "Olympic", "Other"]
+    private let categories = ["All", "Barbell", "Dumbbell", "Cable", "Machine", "Bodyweight", "Kettlebell", "Bands"]
 
     var filteredExercises: [Exercise] {
         exercises.filter {
             (searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText)) &&
-            (selectedBodyPart == nil || selectedBodyPart == "All" || $0.bodyPart == selectedBodyPart) &&
-            (selectedCategory == nil || selectedCategory == "All" || $0.category == selectedCategory)
-        }.sorted(by: { $0.name < $1.name }) // Keep it sorted by name
+            (selectedBodyPart == "All" || $0.bodyPart == selectedBodyPart) &&
+            (selectedCategory == "All" || $0.category == selectedCategory)
+        }.sorted(by: { $0.name < $1.name })
     }
 
     var body: some View {
         NavigationStack {
-            VStack {
+            ZStack {
+                // Background gradient
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color(.systemBackground),
+                        Color(.systemGray6).opacity(0.3)
+                    ]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Filter section with dropdown menus
+                    HStack(spacing: 16) {
+                        // Body Part Dropdown
+                        Menu {
+                            ForEach(bodyParts, id: \.self) { part in
+                                Button(action: { selectedBodyPart = part }) {
                 HStack {
-                    Picker("Body Part", selection: $selectedBodyPart) {
-                        ForEach(bodyParts, id: \.self) { part in Text(part).tag(part as String?) }
-                    }.pickerStyle(.menu)
-                    Picker("Category", selection: $selectedCategory) {
-                        ForEach(categories, id: \.self) { cat in Text(cat).tag(cat as String?) }
-                    }.pickerStyle(.menu)
-                }.padding(.horizontal)
-
-                if isLoading {
-                    ProgressView("Loading exercises...").padding()
-                } else if let errorMessage {
-                    Text("Error: \(errorMessage)").foregroundColor(.red).padding()
-                }
-
-                List(filteredExercises) { exercise in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(exercise.name).font(.headline)
-                            HStack {
-                                if let bodyPart = exercise.bodyPart, !bodyPart.isEmpty {
-                                    Text(bodyPart).font(.caption).foregroundColor(.gray)
+                                        Text(part)
+                                        if selectedBodyPart == part {
+                                            Spacer()
+                                            Image(systemName: "checkmark")
+                                                .foregroundColor(.blue)
+                                        }
+                                    }
                                 }
-                                if let category = exercise.category, !category.isEmpty {
-                                    Text(category).font(.caption).foregroundColor(.gray)
-                                }
-                            }.opacity(0.8)
-                        }
-                        Spacer()
-                        if isSelectionMode {
-                            if currentlySelectedExercises.contains(where: { $0.id == exercise.id }) {
-                                Image(systemName: "checkmark.circle.fill").foregroundColor(.blue)
-                            } else {
-                                Image(systemName: "circle").foregroundColor(.gray)
                             }
+                        } label: {
+                            HStack {
+                                Image(systemName: "figure.arms.open")
+                                    .font(.system(size: 14))
+                                Text(selectedBodyPart)
+                                    .font(.system(size: 14, weight: .medium))
+                                Spacer()
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 12))
+                            }
+                            .foregroundColor(selectedBodyPart == "All" ? .secondary : .blue)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color(.systemBackground))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(selectedBodyPart == "All" ? Color(.systemGray4) : Color.blue.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        
+                        // Category Dropdown
+                        Menu {
+                            ForEach(categories, id: \.self) { category in
+                                Button(action: { selectedCategory = category }) {
+                                    HStack {
+                                        Text(category)
+                                        if selectedCategory == category {
+                                            Spacer()
+                                            Image(systemName: "checkmark")
+                                                .foregroundColor(.blue)
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "tag")
+                                    .font(.system(size: 14))
+                                Text(selectedCategory)
+                                    .font(.system(size: 14, weight: .medium))
+                        Spacer()
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 12))
+                            }
+                            .foregroundColor(selectedCategory == "All" ? .secondary : .blue)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color(.systemBackground))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(selectedCategory == "All" ? Color(.systemGray4) : Color.blue.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
                         }
                     }
-                    .contentShape(Rectangle()) // Make the whole Hstack area tappable
+                    .padding(.horizontal)
+                    .padding(.vertical, 12)
+                    .background(Color(.systemBackground))
+                    
+                    // Content
+                    if isLoading {
+                        Spacer()
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .progressViewStyle(CircularProgressViewStyle(tint: .blue))
+                        Text("Loading exercises...")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 8)
+                        Spacer()
+                    } else if let errorMessage = errorMessage {
+                        Spacer()
+                        VStack(spacing: 16) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 50))
+                                .foregroundColor(.red)
+                            Text("Error")
+                                .font(.title2.weight(.semibold))
+                            Text(errorMessage)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
+                        Spacer()
+                    } else if filteredExercises.isEmpty {
+                        Spacer()
+                        VStack(spacing: 16) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 50))
+                                .foregroundColor(.gray)
+                            Text("No exercises found")
+                                .font(.title2.weight(.semibold))
+                            Text("Try adjusting your filters or search")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                ForEach(filteredExercises) { exercise in
+                                    ModernExerciseRow(
+                                        exercise: exercise,
+                                        isSelected: currentlySelectedExercises.contains(where: { $0.id == exercise.id })
+                                    )
                     .onTapGesture {
                         if isSelectionMode {
                             toggleSelection(for: exercise)
                         } else {
-                            // Restore presenting detail view
-                            selectedExerciseForDetail = exercise
+                                            presentedExercise = exercise
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
                         }
                     }
                 }
             }
             .navigationTitle(isSelectionMode ? "Select Exercises" : "Exercises")
+            .navigationBarTitleDisplayMode(.large)
             .searchable(text: $searchText, prompt: "Search exercises")
             .toolbar {
-                // Toolbar items depend on whether it's in selection mode
                 if isSelectionMode {
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button("Cancel") {
@@ -115,28 +313,37 @@ struct ExercisesView: View {
                         }
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(currentlySelectedExercises.isEmpty ? "Add" : "Add (\(currentlySelectedExercises.count))") {
+                        Button(action: {
                             onSave?(currentlySelectedExercises)
                             dismiss()
+                        }) {
+                            HStack {
+                                Text("Add")
+                                if !currentlySelectedExercises.isEmpty {
+                                    Text("(\(currentlySelectedExercises.count))")
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                            .fontWeight(.semibold)
                         }
-                        .disabled(currentlySelectedExercises.isEmpty && onSave != nil) // Disable if no selection and it's selection mode
+                        .disabled(currentlySelectedExercises.isEmpty && onSave != nil)
                     }
                 } else {
-                    // Original toolbar for browsing mode
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button {
                             showCreateModal = true
                         } label: {
-                            Label("Add New Exercise", systemImage: "plus.circle.fill")
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(.blue)
                         }
                     }
                 }
             }
-            .sheet(isPresented: $showCreateModal) { // For creating a new exercise
-                CreateExerciseView {
-                    newExercise in
+            .sheet(isPresented: $showCreateModal) {
+                CreateExerciseView { newExercise in
                     exercises.append(newExercise)
-                    if isSelectionMode { // If in selection mode, also select the newly created one
+                    if isSelectionMode {
                         if !currentlySelectedExercises.contains(where: { $0.id == newExercise.id }) {
                             currentlySelectedExercises.append(newExercise)
                         }
@@ -144,9 +351,11 @@ struct ExercisesView: View {
                     showCreateModal = false
                 }
             }
-            // Re-add .fullScreenCover for ExerciseDetailView
-            .fullScreenCover(item: $selectedExerciseForDetail) { exerciseToShow in
-                ExerciseDetailView(exercise: exerciseToShow)
+            // Sheet presentation for exercise detail
+            .sheet(item: $presentedExercise) { exercise in
+                ExerciseDetailView(exercise: exercise)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             }
             .task {
                 await fetchExercises()
@@ -166,16 +375,21 @@ struct ExercisesView: View {
         isLoading = true
         errorMessage = nil
         do {
-            let fetchedExercisesData: [Exercise] = try await client.database
-                .from("exercises").select().execute().value
-            DispatchQueue.main.async {
+            // Using the new Supabase API
+            let fetchedExercisesData: [Exercise] = try await client
+                .from("exercises")
+                .select()
+                .execute()
+                .value
+            
+            await MainActor.run {
                 self.exercises = fetchedExercisesData
-                isLoading = false
+                self.isLoading = false
             }
         } catch {
-            DispatchQueue.main.async {
+            await MainActor.run {
                 self.errorMessage = error.localizedDescription
-                isLoading = false
+                self.isLoading = false
                 print("Error fetching exercises: \(error)")
             }
         }
@@ -185,7 +399,7 @@ struct ExercisesView: View {
 // MARK: - Create Exercise View (Sheet)
 
 struct CreateExerciseView: View {
-    @Environment(\.dismiss) var dismiss // This dismiss is for the CreateExerciseView sheet itself
+    @Environment(\.dismiss) var dismiss
     var onSave: (Exercise) -> Void
 
     @State private var name: String = ""
@@ -209,33 +423,203 @@ struct CreateExerciseView: View {
 
     var body: some View {
         NavigationView {
-            Form {
-                Section(header: Text("Exercise Details")) {
-                    TextField("Exercise Name", text: $name)
-                    Picker("Body Part", selection: $selectedBodyPart) {
-                        ForEach(bodyParts, id: \.self) { part in Text(part) }
+            ZStack {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 24) {
+                    // Header section
+                    VStack(spacing: 8) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.blue.opacity(0.1))
+                                .frame(width: 80, height: 80)
+                            
+                            Image(systemName: "figure.strengthtraining.traditional")
+                                .font(.system(size: 40))
+                                .foregroundColor(.blue)
+                        }
+                        
+                        Text("Create New Exercise")
+                            .font(.title2.weight(.bold))
+                        
+                        Text("Add a custom exercise to your library")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
                     }
-                    Picker("Category", selection: $selectedCategory) {
-                        ForEach(categories, id: \.self) { cat in Text(cat) }
+                    .padding(.top, 20)
+                    
+                    // Form fields
+                    VStack(spacing: 20) {
+                        // Exercise name field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Exercise Name", systemImage: "pencil")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.secondary)
+                            
+                            TextField("e.g. Barbell Bench Press", text: $name)
+                                .textFieldStyle(.plain)
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(.systemBackground))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(.systemGray4), lineWidth: 1)
+                                )
+                        }
+                        
+                        // Body Part and Category pickers
+                        HStack(spacing: 16) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label("Body Part", systemImage: "figure.arms.open")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundColor(.secondary)
+                                
+                                Menu {
+                                    ForEach(bodyParts, id: \.self) { part in
+                                        Button(part) {
+                                            selectedBodyPart = part
+                                        }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(selectedBodyPart)
+                                            .foregroundColor(.primary)
+                                        Spacer()
+                                        Image(systemName: "chevron.down")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding()
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color(.systemBackground))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color(.systemGray4), lineWidth: 1)
+                                    )
+                                }
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label("Category", systemImage: "tag")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundColor(.secondary)
+                                
+                                Menu {
+                                    ForEach(categories, id: \.self) { category in
+                                        Button(category) {
+                                            selectedCategory = category
+                                        }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(selectedCategory)
+                                            .foregroundColor(.primary)
+                                        Spacer()
+                                        Image(systemName: "chevron.down")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding()
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color(.systemBackground))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color(.systemGray4), lineWidth: 1)
+                                    )
+                                }
+                            }
+                        }
+                        
+                        // Instructions field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Instructions (Optional)", systemImage: "doc.text")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.secondary)
+                            
+                            ZStack(alignment: .topLeading) {
+                                if instructions.isEmpty {
+                                    Text("Add step-by-step instructions...")
+                                        .foregroundColor(Color(.placeholderText))
+                                        .padding(.top, 12)
+                                        .padding(.leading, 12)
+                                }
+                                
+                                TextEditor(text: $instructions)
+                                    .textFieldStyle(.plain)
+                                    .padding(8)
+                                    .frame(minHeight: 100)
+                                    .scrollContentBackground(.hidden)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color(.systemBackground))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color(.systemGray4), lineWidth: 1)
+                                    )
+                            }
+                        }
                     }
-                    TextEditorWithPlaceholder(text: $instructions, placeholder: "Instructions (Optional)")
-                        .frame(height: 100)
-                }
-
-                if let submissionError { Text("Error: \(submissionError)").foregroundColor(.red) }
-
+                    .padding(.horizontal)
+                    
+                    // Error message
+                    if let submissionError = submissionError {
+                        HStack {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .foregroundColor(.red)
+                            Text(submissionError)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        .padding(.horizontal)
+                    }
+                    
+                    Spacer()
+                    
+                    // Action buttons
+                    VStack(spacing: 12) {
                 Button(action: { Task { await submitExercise() } }) {
-                    if isSubmitting { ProgressView().frame(maxWidth: .infinity) }
-                    else { Text("Save Exercise").frame(maxWidth: .infinity) }
-                }
+                            if isSubmitting {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                Text("Save Exercise")
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(name.isEmpty ? Color.gray : Color.blue)
+                        )
+                        .foregroundColor(.white)
                 .disabled(name.isEmpty || isSubmitting)
-            }
-            .navigationTitle("Create New Exercise")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() } // Dismisses CreateExerciseView sheet
+                        
+                        Button("Cancel") {
+                            dismiss()
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemGray5))
+                        )
+                        .foregroundColor(.primary)
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom)
                 }
             }
+            .navigationBarHidden(true)
         }
     }
 
@@ -255,40 +639,47 @@ struct CreateExerciseView: View {
                 instructions: instructions.isEmpty ? nil : instructions,
                 created_by_user_id: userId
             )
-            let newExercise: Exercise = try await client.database
-                .from("exercises").insert(payload, returning: .representation).select().single().execute().value
-            DispatchQueue.main.async {
+            
+            // Using the new Supabase API
+            let newExercise: Exercise = try await client
+                .from("exercises")
+                .insert(payload)
+                .select()
+                .single()
+                .execute()
+                .value
+            
+            // Enqueue for AI enrichment if any fields are missing
+            if selectedBodyPart == "Other" || selectedCategory == "Bodyweight" || instructions.isEmpty {
+                struct EnrichmentParams: Encodable {
+                    let p_id: UUID
+                }
+                
+                // Fire and forget - we don't wait for this
+                Task {
+                    do {
+                        try await client.rpc(
+                            "enqueue_exercise_enrichment",
+                            params: EnrichmentParams(p_id: newExercise.id)
+                        ).execute()
+                        print("Exercise queued for AI enrichment")
+                    } catch {
+                        print("Failed to queue exercise for enrichment: \(error)")
+                    }
+                }
+            }
+            
+            await MainActor.run {
                 onSave(newExercise)
                 isSubmitting = false
-                // dismiss() // This dismiss is now handled by onSave in the parent if it needs to close this sheet AND the picker
-                           // Actually, this dismiss is correct for THIS sheet (CreateExerciseView).
                 dismiss() 
             }
         } catch {
-            DispatchQueue.main.async {
+            await MainActor.run {
                 submissionError = error.localizedDescription
                 isSubmitting = false
                 print("Error submitting exercise: \(error)")
             }
-        }
-    }
-}
-
-// MARK: - Helper Views
-
-struct TextEditorWithPlaceholder: View {
-    @Binding var text: String
-    var placeholder: String
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            if text.isEmpty {
-                Text(placeholder)
-                    .foregroundColor(Color(UIColor.placeholderText))
-                    .padding(.top, 8)
-                    .padding(.leading, 5)
-            }
-            TextEditor(text: $text)
         }
     }
 }
@@ -298,7 +689,5 @@ struct TextEditorWithPlaceholder: View {
 struct ExercisesView_Previews: PreviewProvider {
     static var previews: some View {
         ExercisesView()
-            // For preview to work with SupabaseManager, you might need to mock it
-            // or ensure it can initialize safely in a preview context.
     }
 } 

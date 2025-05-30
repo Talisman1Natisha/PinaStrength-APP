@@ -11,32 +11,27 @@ import SwiftUI
 struct PinaStrengthApp: App {
     @StateObject private var tabSelection = TabSelection()
     @StateObject private var workoutStarterService = WorkoutStarterService()
-
-    init() {
-        Task {
-            do {
-                // Test credentials
-                let email = "itsnatanimabebe@gmail.com"
-                let password = "PGAwinner"
-
-                // Attempt to sign in first
-                let session = try await SupabaseManager.shared.client.auth.signIn(
-                    email: email,
-                    password: password
-                )
-                print("✅ Logged in with email: \(session.user.email ?? "unknown")")
-            } catch {
-                print("❌ Login failed: \(error.localizedDescription)")
-                print("Full error details: \(error)") // This might give more info
-            }
-        }
-    }
+    @StateObject private var authManager = AuthManager()
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(tabSelection)
-                .environmentObject(workoutStarterService)
+            if authManager.isLoading {
+                // Show loading screen while checking auth state
+                ProgressView("Loading...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+            } else if authManager.isAuthenticated {
+                // Show main app when authenticated
+                ContentView()
+                    .environmentObject(tabSelection)
+                    .environmentObject(workoutStarterService)
+                    .environmentObject(authManager)
+            } else {
+                // Show auth screen when not authenticated
+                AuthView(onAuthenticated: {
+                    authManager.signIn()
+                })
+            }
         }
     }
 }

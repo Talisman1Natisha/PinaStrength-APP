@@ -654,7 +654,7 @@ struct ActiveWorkoutSessionView: View {
         for exerciseDetail in items.sorted(by: { ($0.orderIndex ?? 0) < ($1.orderIndex ?? 0) }) {
             // Assuming Exercise struct can be initialized with just id and name for this purpose.
             // A more robust solution might fetch full Exercise details if needed.
-            let exercise = Exercise(id: exerciseDetail.exerciseId, name: exerciseDetail.exerciseName, bodyPart: nil, category: nil, equipment: nil, instructions: nil, createdByUser_id: nil) 
+            let exercise = Exercise(id: exerciseDetail.exerciseId, name: exerciseDetail.exerciseName, bodyPart: nil, category: nil, equipment: nil, instructions: nil, createdByUser_id: nil, imageUrl: nil) 
             tempSelectedExercises.append(exercise)
             
             var setsForThisExercise: [WorkoutSetInput] = []

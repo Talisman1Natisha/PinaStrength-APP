@@ -36,17 +36,36 @@ struct WorkoutSetHistoryItem: Identifiable, Decodable, Hashable {
 
 // MARK: - ViewModel
 
-@MainActor // Ensure UI updates are on the main thread
+@MainActor
 class ExerciseDetailViewModel: ObservableObject {
     @Published var exerciseHistory: [WorkoutSetHistoryItem] = []
+    @Published var records: [ExerciseRecord] = []
     @Published var isLoadingHistory: Bool = true
+    @Published var isLoadingRecords: Bool = true
     @Published var historyError: String? = nil
+    @Published var recordsError: String? = nil
+    @Published var selectedTab: ExerciseDetailTab = .about
 
     private let exerciseID: UUID
     private let client = SupabaseManager.shared.client
+    
+    struct ExerciseRecord: Identifiable {
+        let id = UUID()
+        let recordType: String
+        let weight: Double
+        let reps: Int
+        let workoutDate: Date
+    }
 
     init(exerciseID: UUID) {
         self.exerciseID = exerciseID
+    }
+    
+    func fetchAll() async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.fetchExerciseHistory() }
+            group.addTask { await self.fetchRecords() }
+        }
     }
 
     func fetchExerciseHistory() async {
@@ -59,33 +78,106 @@ class ExerciseDetailViewModel: ObservableObject {
             return
         }
 
-        struct RpcParams: Encodable {
-            let ex_id: UUID
-            let uid: UUID
+        struct HistoryParams: Encodable {
+            let p_user: UUID
+            let p_exercise: UUID
+            let p_limit: Int
+        }
+        
+        struct HistoryResponse: Decodable {
+            let workout_id: UUID
+            let workout_date: Date
+            let set_number: Int
+            let weight: Double
+            let reps: Int
         }
 
         do {
-            let params = RpcParams(ex_id: self.exerciseID, uid: userId)
-            let fetchedData: [WorkoutSetHistoryItem] = try await client.rpc(
+            let params = HistoryParams(
+                p_user: userId,
+                p_exercise: exerciseID,
+                p_limit: 50
+            )
+            
+            let response: [HistoryResponse] = try await client.rpc(
                 "get_exercise_history",
                  params: params
             )
             .execute()
             .value
             
-            let sortedHistory = fetchedData.sorted {
-                if $0.workoutDate != $1.workoutDate {
-                    return $0.workoutDate > $1.workoutDate
-                } else {
-                    return $0.setNumber < $1.setNumber
-                }
+            // Convert to WorkoutSetHistoryItem format
+            let historyItems = response.map { item in
+                WorkoutSetHistoryItem(
+                    id: UUID(), // Generate a unique ID for the view
+                    workoutId: item.workout_id,
+                    workoutDate: item.workout_date,
+                    workoutNotes: nil, // We don't have notes from this RPC
+                    setNumber: item.set_number,
+                    weight: item.weight,
+                    reps: item.reps,
+                    restSeconds: nil // We don't have rest seconds from this RPC
+                )
             }
-            self.exerciseHistory = sortedHistory
+            
+            self.exerciseHistory = historyItems
             self.isLoadingHistory = false
         } catch {
             self.historyError = error.localizedDescription
             self.isLoadingHistory = false
-            print("Error fetching exercise history via RPC: \(error)")
+            print("Error fetching exercise history: \(error)")
+        }
+    }
+    
+    func fetchRecords() async {
+        isLoadingRecords = true
+        recordsError = nil
+        
+        guard let userId = try? await client.auth.session.user.id else {
+            recordsError = "User not authenticated."
+            isLoadingRecords = false
+            return
+        }
+
+        struct RecordsParams: Encodable {
+            let p_user: UUID
+            let p_exercise: UUID
+        }
+        
+        struct RecordsResponse: Decodable {
+            let record_type: String
+            let weight: Double
+            let reps: Int
+            let workout_id: UUID
+            let workout_date: Date
+        }
+
+        do {
+            let params = RecordsParams(
+                p_user: userId,
+                p_exercise: exerciseID
+            )
+            
+            let response: [RecordsResponse] = try await client.rpc(
+                "get_exercise_records",
+                params: params
+            )
+            .execute()
+            .value
+            
+            self.records = response.map { item in
+                ExerciseRecord(
+                    recordType: item.record_type,
+                    weight: item.weight,
+                    reps: item.reps,
+                    workoutDate: item.workout_date
+                )
+            }
+            self.isLoadingRecords = false
+        } catch {
+            self.recordsError = error.localizedDescription
+            self.isLoadingRecords = false
+            print("Error fetching records: \(error)")
         }
     }
 }
@@ -95,7 +187,6 @@ class ExerciseDetailViewModel: ObservableObject {
 enum ExerciseDetailTab: String, CaseIterable, Identifiable {
     case about = "About"
     case history = "History"
-    case charts = "Charts"
     case records = "Records"
     var id: String { self.rawValue }
 }
@@ -104,10 +195,9 @@ enum ExerciseDetailTab: String, CaseIterable, Identifiable {
 
 struct ExerciseDetailView: View {
     @Environment(\.dismiss) var dismiss
-    let exercise: Exercise // Passed in from ExercisesView
+    let exercise: Exercise
 
     @StateObject private var viewModel: ExerciseDetailViewModel
-    @State private var selectedTab: ExerciseDetailTab = .about
     
     init(exercise: Exercise) {
         self.exercise = exercise
@@ -115,44 +205,73 @@ struct ExerciseDetailView: View {
     }
 
     var body: some View {
-        NavigationView { // NavigationView for the modal's own title and potential toolbar items
+        NavigationView {
             VStack(spacing: 0) {
-                Picker("Select Tab", selection: $selectedTab) {
+                // Custom header with exercise name and dismiss button
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(exercise.name)
+                            .font(.title2.weight(.bold))
+                            .lineLimit(1)
+                        
+                        if let bodyPart = exercise.bodyPart, let category = exercise.category {
+                            Text("\(bodyPart) • \(category)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(.gray.opacity(0.6))
+                            .background(Circle().fill(Color(.systemBackground)))
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+                
+                Picker("Select Tab", selection: $viewModel.selectedTab) {
                     ForEach(ExerciseDetailTab.allCases) {
                         Text($0.rawValue).tag($0)
                     }
                 }
                 .pickerStyle(.segmented)
-                .padding()
+                .padding(.horizontal)
+                .padding(.bottom, 16)
 
                 // Content based on selected tab
                 Group {
-                    switch selectedTab {
+                    switch viewModel.selectedTab {
                     case .about:
                         AboutTabView(exercise: exercise)
                     case .history:
-                        HistoryTabView(history: viewModel.exerciseHistory, isLoading: viewModel.isLoadingHistory, error: viewModel.historyError)
-                    case .charts:
-                        ChartsTabView(history: viewModel.exerciseHistory, isLoading: viewModel.isLoadingHistory, error: viewModel.historyError)
+                        HistoryTabView(
+                            history: viewModel.exerciseHistory,
+                            isLoading: viewModel.isLoadingHistory,
+                            error: viewModel.historyError
+                        )
                     case .records:
-                        RecordsTabView(history: viewModel.exerciseHistory, isLoading: viewModel.isLoadingHistory, error: viewModel.historyError)
+                        RecordsTabView(
+                            records: viewModel.records,
+                            history: viewModel.exerciseHistory,
+                            isLoading: viewModel.isLoadingRecords,
+                            error: viewModel.recordsError
+                        )
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .navigationTitle(exercise.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
+            .navigationBarHidden(true)
             .task {
-                await viewModel.fetchExerciseHistory()
+                await viewModel.fetchAll()
             }
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -160,62 +279,208 @@ struct ExerciseDetailView: View {
 
 struct AboutTabView: View {
     let exercise: Exercise
+    
+    private var iconName: String {
+        switch exercise.category?.lowercased() {
+        case "barbell": return "figure.strengthtraining.traditional"
+        case "dumbbell": return "dumbbell.fill"
+        case "cable": return "cable.connector"
+        case "machine": return "gearshape.fill"
+        case "bodyweight": return "figure.arms.open"
+        case "kettlebell": return "figure.strengthtraining.functional"
+        case "bands": return "bandage.fill"
+        default: return "figure.walk"
+        }
+    }
+    
+    private var categoryColor: Color {
+        switch exercise.category?.lowercased() {
+        case "barbell": return .blue
+        case "dumbbell": return .purple
+        case "cable": return .orange
+        case "machine": return .red
+        case "bodyweight": return .green
+        case "kettlebell": return .indigo
+        case "bands": return .pink
+        default: return .gray
+        }
+    }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Placeholder for Exercise Image
-                // Image(systemName: "photo") // Or fetch an actual image if URL is available
-                //     .resizable()
-                //     .scaledToFit()
-                //     .frame(height: 200)
-                //     .cornerRadius(10)
-                //     .padding(.bottom)
-                Text("Image Placeholder")
-                    .frame(height: 150)
+            VStack(alignment: .leading, spacing: 24) {
+                // Exercise Image Section
+                if let imageUrl = exercise.imageUrl, !imageUrl.isEmpty {
+                    AsyncImage(url: URL(string: imageUrl)) { image in
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxHeight: 250)
+                            .frame(maxWidth: .infinity)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+                    } placeholder: {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.gray.opacity(0.2))
                     .frame(maxWidth: .infinity)
-                    .background(Color.gray.opacity(0.2))
-                    .cornerRadius(10)
-                    .padding(.bottom)
-
-                if let bodyPart = exercise.bodyPart, !bodyPart.isEmpty {
-                    HStack {
-                        Text("Body Part:").fontWeight(.semibold)
-                        Text(bodyPart)
+                            .frame(height: 250)
+                            .overlay(
+                                ProgressView()
+                                    .scaleEffect(1.5)
+                            )
                     }
+                } else {
+                    // Fallback icon when no image
+                    HStack {
+                        Spacer()
+                        ZStack {
+                            Circle()
+                                .fill(LinearGradient(
+                                    gradient: Gradient(colors: [categoryColor.opacity(0.2), categoryColor.opacity(0.1)]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ))
+                                .frame(width: 120, height: 120)
+                            
+                            Image(systemName: iconName)
+                                .font(.system(size: 60))
+                                .foregroundColor(categoryColor)
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 20)
                 }
+                
+                // Exercise Details Cards
+                VStack(spacing: 16) {
+                    if let bodyPart = exercise.bodyPart, !bodyPart.isEmpty {
+                        InfoCard(
+                            icon: "figure.strengthtraining.traditional",
+                            title: "Body Part",
+                            value: bodyPart,
+                            color: .blue
+                        )
+                    }
+                    
                 if let category = exercise.category, !category.isEmpty {
-                    HStack {
-                        Text("Category:").fontWeight(.semibold)
-                        Text(category)
+                        InfoCard(
+                            icon: "tag.fill",
+                            title: "Category",
+                            value: category,
+                            color: categoryColor
+                        )
                     }
-                }
+                    
                 if let equipment = exercise.equipment, !equipment.isEmpty {
-                     HStack {
-                        Text("Equipment:").fontWeight(.semibold)
-                        Text(equipment)
+                        InfoCard(
+                            icon: "dumbbell.fill",
+                            title: "Equipment",
+                            value: equipment,
+                            color: .orange
+                        )
                     }
                 }
 
-                Text("Instructions").font(.title2).fontWeight(.semibold)
+                // Instructions Section
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: "list.number")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                        Text("Instructions")
+                            .font(.title2.weight(.bold))
+                    }
+                    
                 if let instructions = exercise.instructions, !instructions.isEmpty {
-                    // Attempt to number lines if instructions are newline separated
+                        VStack(alignment: .leading, spacing: 12) {
                     let instructionLines = instructions.split(whereSeparator: \.isNewline)
                     if !instructionLines.isEmpty {
-                        ForEach(instructionLines.indices, id: \.self) { index in
-                            Text("\(index + 1). \(instructionLines[index])")
-                                .padding(.bottom, 2)
-                        }
-                    } else {
-                         Text(instructions) // Fallback if not easily splittable or single line
+                                ForEach(Array(instructionLines.enumerated()), id: \.offset) { index, line in
+                                    HStack(alignment: .top, spacing: 12) {
+                                        Text("\(index + 1)")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundColor(.white)
+                                            .frame(width: 24, height: 24)
+                                            .background(Circle().fill(Color.blue))
+                                        
+                                        Text(String(line))
+                                            .font(.body)
+                                            .foregroundColor(.primary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                            } else {
+                                Text(instructions)
+                                    .font(.body)
+                                    .foregroundColor(.primary)
+                                    .padding()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color(.systemGray6))
+                                    )
+                            }
                     }
                 } else {
                     Text("No instructions provided for this exercise.")
+                            .font(.body)
                         .foregroundColor(.secondary)
+                            .italic()
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color(.systemGray4), style: StrokeStyle(lineWidth: 1, dash: [5]))
+                            )
+                    }
                 }
+                .padding(.top, 8)
             }
             .padding()
         }
+        .background(Color(.systemGroupedBackground))
+    }
+}
+
+// Helper view for info cards
+struct InfoCard: View {
+    let icon: String
+    let title: String
+    let value: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(color.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                    .foregroundColor(color)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(value)
+                    .font(.body.weight(.semibold))
+                    .foregroundColor(.primary)
+            }
+            
+            Spacer()
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        )
     }
 }
 
@@ -279,117 +544,13 @@ struct HistoryTabView: View {
     }
 }
 
-// MARK: - Charts Tab (Polished States)
-
-struct ChartsTabView: View {
-    let history: [WorkoutSetHistoryItem]
-    let isLoading: Bool
-    let error: String?
-
-    var body: some View {
-        Group {
-            if isLoading {
-                VStack {
-                    Spacer()
-                    ProgressView("Loading Chart Data...")
-                    Spacer()
-                }
-            } else if let error {
-                VStack {
-                    Spacer()
-                    Text("Failed to load chart data: \(error)")
-                        .foregroundColor(.red)
-                        .multilineTextAlignment(.center)
-                        .padding()
-                    Spacer()
-                }
-            } else if history.isEmpty {
-                VStack {
-                    Spacer()
-                    Text("No Chart Data Yet")
-                        .font(.headline)
-                        .padding(.bottom, 5)
-                    Text("Perform this exercise multiple times to see your progress charted here.")
-                        .multilineTextAlignment(.center)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .padding()
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 30) {
-                        chartSection(title: "Best Set (Est. 1RM)", dataPoints: processForBestSet1RM())
-                        chartSection(title: "Max Weight Lifted", dataPoints: processForMaxWeight())
-                        chartSection(title: "Total Volume", dataPoints: processForTotalVolume())
-                    }
-                    .padding()
-                }
-            }
-        }
-    }
-
-    private func chartSection(title: String, dataPoints: [(Date, Double)]) -> some View {
-        VStack(alignment: .leading) {
-            Text(title).font(.headline)
-            if dataPoints.count < 2 { 
-                Text("Not enough data for chart.")
-                    .foregroundColor(.secondary)
-                    .frame(height: 150)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(8)
-            } else {
-                Text("Chart Placeholder for \(title) - \(dataPoints.count) data points")
-                    .frame(height: 150)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.gray.opacity(0.2))
-                    .cornerRadius(8)
-                    .overlay( Text("Data: \(dataPoints.map { "(\($0.0.formatted(date: .numeric, time: .omitted)), \(String(format: "%.1f", $0.1)))" }.joined(separator: ", "))").font(.caption2).padding(5), alignment: .bottomLeading)
-            }
-        }
-    }
-    
-    private func processForBestSet1RM() -> [(Date, Double)] {
-        Dictionary(grouping: history, by: { Calendar.current.startOfDay(for: $0.workoutDate) })
-            .mapValues { setsInDay in
-                setsInDay.map { $0.estimatedOneRepMax }.max() ?? 0
-            }
-            .sorted(by: { $0.key < $1.key })
-            .map { ($0.key, $0.value) }
-    }
-
-    private func processForMaxWeight() -> [(Date, Double)] {
-        Dictionary(grouping: history, by: { Calendar.current.startOfDay(for: $0.workoutDate) })
-            .mapValues { setsInDay in
-                setsInDay.map { $0.weight }.max() ?? 0
-            }
-            .sorted(by: { $0.key < $1.key })
-            .map { ($0.key, $0.value) }
-    }
-
-    private func processForTotalVolume() -> [(Date, Double)] {
-        Dictionary(grouping: history, by: { Calendar.current.startOfDay(for: $0.workoutDate) })
-            .mapValues { setsInDay in
-                setsInDay.reduce(0) { $0 + ($1.weight * Double($1.reps)) }
-            }
-            .sorted(by: { $0.key < $1.key })
-            .map { ($0.key, $0.value) }
-    }
-}
-
 // MARK: - Records Tab (Polished States)
 
 struct RecordsTabView: View {
+    let records: [ExerciseDetailViewModel.ExerciseRecord]
     let history: [WorkoutSetHistoryItem]
     let isLoading: Bool
     let error: String?
-
-    struct RepRecord: Identifiable {
-        let id = UUID()
-        let reps: Int
-        var bestPerformance: String
-        var predicted1RM: String
-    }
 
     var body: some View {
         Group {
@@ -408,57 +569,70 @@ struct RecordsTabView: View {
                         .padding()
                     Spacer()
                 }
-            } else if history.isEmpty {
-                // For records, even with no history, we show the table structure with placeholders.
-                // So, the "empty" state means showing the table with dashes.
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        Text("No Record Data Yet")
-                            .font(.headline)
-                            .padding(.bottom, 5)
-                        Text("Perform this exercise to see your personal records here.")
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.secondary)
-                            .padding(.bottom, 20)
-                        personalRecordsSection // Will show dashes
-                        repRecordsTable      // Will show dashes
-                    }
-                    .padding()
+            } else if records.isEmpty && history.isEmpty {
+                VStack {
+                    Spacer()
+                    Text("No Records Yet")
+                        .font(.headline)
+                        .padding(.bottom, 5)
+                    Text("Perform this exercise to see your personal records here.")
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                    Spacer()
                 }
+                .padding()
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        personalRecordsSection
-                        repRecordsTable
+                    VStack(alignment: .leading, spacing: 24) {
+                        // Personal Records from backend
+                        if !records.isEmpty {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("Personal Records")
+                                    .font(.title2.weight(.bold))
+                                    .padding(.bottom, 8)
+                                
+                                ForEach(records) { record in
+                                    VStack(spacing: 16) {
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(record.recordType)
+                                                    .font(.headline)
+                                                    .foregroundColor(.primary)
+                                                
+                                                Text("\(String(format: "%.1f", record.weight)) lbs × \(record.reps) reps")
+                                                    .font(.title3.weight(.semibold))
+                                                    .foregroundColor(.blue)
+                                            }
+                                            
+                                            Spacer()
+                                            
+                                            VStack(alignment: .trailing, spacing: 4) {
+                                                Image(systemName: "trophy.fill")
+                                                    .font(.system(size: 28))
+                                                    .foregroundColor(.yellow)
+                                                
+                                                Text(record.workoutDate, style: .date)
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
                     }
                     .padding()
-                }
-            }
-        }
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .fill(Color(.systemBackground))
+                                                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+                                        )
+                                    }
+                                }
     }
+}
 
-    private var personalRecordsSection: some View {
-        VStack(alignment: .leading) {
-            Text("Personal Records").font(.title2).fontWeight(.semibold)
-            if history.isEmpty {
-                Text("Max 1RM (Est.): -").padding(.top, 2)
-                Text("Heaviest Set: -").padding(.top, 2)
-                Text("Max Volume (Single Set): -").padding(.top, 2)
-            } else {
-                let max1RM = history.map { $0.estimatedOneRepMax }.max() ?? 0
-                let heaviestSet = history.max(by: { $0.weight < $1.weight })
-                let maxVolumeSet = history.max(by: { ($0.weight * Double($0.reps)) < ($1.weight * Double($1.reps)) })
-
-                Text("Max 1RM (Est.): \(String(format: "%.1f", max1RM)) lbs").padding(.top, 2)
-                if let heaviest = heaviestSet {
-                    Text("Heaviest Set: \(String(format: "%.1f", heaviest.weight)) lbs x \(heaviest.reps) reps").padding(.top, 2)
-                } else {
-                    Text("Heaviest Set: -").padding(.top, 2)
-                }
-                if let maxVol = maxVolumeSet {
-                    Text("Max Volume (Single Set): \(String(format: "%.1f", maxVol.weight * Double(maxVol.reps))) lbs (\(String(format: "%.1f", maxVol.weight))x\(maxVol.reps))").padding(.top, 2)
-                } else {
-                    Text("Max Volume (Single Set): -").padding(.top, 2)
+                        // Rep Records Table (from history)
+                        if !history.isEmpty {
+                            repRecordsTable
+                        }
+                    }
+                    .padding()
                 }
             }
         }
@@ -466,24 +640,60 @@ struct RecordsTabView: View {
 
     private var repRecordsTable: some View {
         VStack(alignment: .leading) {
-            Text("Rep Records").font(.title2).fontWeight(.semibold).padding(.bottom, 5)
-            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 5) {
-                GridRow {
-                    Text("Reps").fontWeight(.bold)
-                    Text("Best Performance").fontWeight(.bold)
-                    Text("Predicted 1RM").fontWeight(.bold)
+            Text("Rep Records")
+                .font(.title2.weight(.bold))
+                .padding(.bottom, 8)
+            
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("Reps")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(width: 50, alignment: .leading)
+                    
+                    Text("Best Performance")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    Text("Est. 1RM")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(width: 80, alignment: .trailing)
                 }
-                Divider()
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(.systemGray6))
+                
+                // Rows
                 ForEach(1...10, id: \.self) { repCount in
                     let record = getRecord(forReps: repCount)
-                    GridRow {
+                    
+                    HStack {
                         Text("\(repCount)")
+                            .font(.body.weight(.medium))
+                            .frame(width: 50, alignment: .leading)
+                        
                         Text(record.bestPerformance)
+                            .font(.body)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
                         Text(record.predicted1RM)
+                            .font(.body.weight(.medium))
+                            .foregroundColor(.blue)
+                            .frame(width: 80, alignment: .trailing)
                     }
-                    if repCount < 10 { Divider() }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(repCount % 2 == 0 ? Color(.systemGray6).opacity(0.3) : Color.clear)
                 }
             }
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(.systemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color(.systemGray4), lineWidth: 1)
+            )
         }
     }
 
@@ -496,15 +706,21 @@ struct RecordsTabView: View {
         if let bestSet = setsForRepTarget.max(by: { $0.weight < $1.weight }) {
             return RepRecord(
                 reps: repsTarget,
-                bestPerformance: "\(String(format: "%.1f", bestSet.weight)) lbs x \(bestSet.reps)",
+                bestPerformance: "\(String(format: "%.1f", bestSet.weight)) lbs",
                 predicted1RM: "\(String(format: "%.1f", bestSet.estimatedOneRepMax)) lbs"
             )
         } else {
             return RepRecord(reps: repsTarget, bestPerformance: "-", predicted1RM: "-")
         }
     }
+    
+    struct RepRecord: Identifiable {
+        let id = UUID()
+        let reps: Int
+        var bestPerformance: String
+        var predicted1RM: String
+    }
 }
-
 
 // MARK: - Preview (Optional)
 

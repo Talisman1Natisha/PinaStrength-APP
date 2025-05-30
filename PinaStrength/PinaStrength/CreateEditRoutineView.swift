@@ -1,31 +1,6 @@
 import SwiftUI
 import Supabase
 
-// MARK: - Data Model for Routine Set Template Input
-struct RoutineSetTemplateInput: Identifiable, Equatable, Hashable, Decodable {
-    let id: UUID
-    var setNumber: Int?      
-    var targetReps: String?    // Changed to Optional
-    var targetWeight: String?  // Changed to Optional
-    var targetRestSeconds: String? // Changed to Optional
-
-    enum CodingKeys: String, CodingKey { 
-        case id 
-        case setNumber = "set_number"
-        case targetReps = "target_reps"
-        case targetWeight = "target_weight"
-        case targetRestSeconds = "target_rest_seconds"
-    }
-    
-    init(id: UUID = UUID(), setNumber: Int? = nil, targetReps: String? = nil, targetWeight: String? = nil, targetRestSeconds: String? = nil) {
-        self.id = id
-        self.setNumber = setNumber
-        self.targetReps = targetReps
-        self.targetWeight = targetWeight
-        self.targetRestSeconds = targetRestSeconds
-    }
-}
-
 // MARK: - New Subview for a single Set Template Input Row
 struct RoutineSetTemplateInputRowView: View {
     let setIndex: Int

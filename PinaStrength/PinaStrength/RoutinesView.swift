@@ -9,20 +9,6 @@ import Foundation
 import SwiftUI
 import Supabase
 
-// MARK: - Data Model for Routine List Item
-struct RoutineListItem: Identifiable, Decodable, Hashable {
-    let id: UUID
-    let name: String
-    let updatedAt: Date // To show when it was last modified
-    // We can add a count of exercises or a brief description later if needed
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case updatedAt = "updated_at"
-    }
-}
-
 // MARK: - Routines View
 
 struct RoutinesView: View {

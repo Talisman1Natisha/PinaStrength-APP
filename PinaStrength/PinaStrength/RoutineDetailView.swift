@@ -5,14 +5,6 @@ import Supabase
 // If it's not in a shared location, we might need to redefine or move it.
 // For now, assuming it's accessible or we'll redefine a similar one here.
 
-struct RoutineExerciseDetailItem: Identifiable, Hashable {
-    let id: UUID // routine_exercises.id
-    let exerciseId: UUID
-    let exerciseName: String
-    let orderIndex: Int?
-    var setTemplates: [RoutineSetTemplateInput] = []
-}
-
 // MARK: - New Subview for a single Set Template display row
 struct RoutineSetTemplateDisplayRow: View {
     let setTemplate: RoutineSetTemplateInput

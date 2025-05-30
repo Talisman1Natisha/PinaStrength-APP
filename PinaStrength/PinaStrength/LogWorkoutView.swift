@@ -343,6 +343,7 @@ struct LogWorkoutView: View {
     @State private var showWorkoutSavedMessage: Bool = false
     @State private var isStartingWorkout: Bool = false
     @State private var showCreateRoutine: Bool = false
+    @State private var showAICoach: Bool = false // Add this state
     
     // Grid layout
     private let gridColumns = [
@@ -356,6 +357,9 @@ struct LogWorkoutView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     // Quick Start Section
                     quickStartSection
+                    
+                    // AI Coach Section - NEW
+                    aiCoachSection
                     
                     // Routines Section
                     if !routineVM.routines.isEmpty {
@@ -413,6 +417,11 @@ struct LogWorkoutView: View {
             .sheet(isPresented: $showCreateRoutine) {
                 RoutineEditorView()
             }
+            .sheet(isPresented: $showAICoach) {
+                AICoachChatView()
+                    .environmentObject(workoutStarterService)
+                    .environmentObject(TabSelection())
+            }
             .onReceive(NotificationCenter.default.publisher(for: .routineChanged)) { _ in
                 Task {
                     await routineVM.refresh()
@@ -461,6 +470,50 @@ struct LogWorkoutView: View {
                     .cornerRadius(12)
             }
             .disabled(isStartingWorkout)
+        }
+    }
+    
+    // AI Coach Section - NEW
+    private var aiCoachSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("AI Assistant")
+                .font(.headline)
+                .foregroundColor(.secondary)
+            
+            Button(action: { showAICoach = true }) {
+                HStack(spacing: 16) {
+                    Image(systemName: "message.badge.waveform")
+                        .font(.system(size: 24))
+                        .foregroundColor(.blue)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            Circle()
+                                .fill(Color.blue.opacity(0.1))
+                        )
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Chat with AI Coach")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        Text("Get personalized workout plans")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(.systemBackground))
+                        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
     
