@@ -35,12 +35,10 @@ struct RoutineCard: View {
             }
             .foregroundColor(.secondary)
         }
-        .padding()
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(16)
         .contextMenu {
             Button {
                 // TODO: Implement edit functionality

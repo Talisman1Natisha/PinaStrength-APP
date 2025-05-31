@@ -24,7 +24,13 @@ struct RoutineGridItem: Identifiable, Decodable, Hashable {
     
     // Convert to RoutineListItem for compatibility
     var asRoutineListItem: RoutineListItem {
-        RoutineListItem(id: id, name: name, updatedAt: updatedAt)
+        RoutineListItem(
+            id: id, 
+            userId: user_id, 
+            name: name, 
+            description: nil, 
+            updatedAt: updatedAt
+        )
     }
 }
 

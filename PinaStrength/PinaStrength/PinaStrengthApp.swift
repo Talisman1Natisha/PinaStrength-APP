@@ -28,9 +28,8 @@ struct PinaStrengthApp: App {
                     .environmentObject(authManager)
             } else {
                 // Show auth screen when not authenticated
-                AuthView(onAuthenticated: {
-                    authManager.signIn()
-                })
+                AuthView()
+                    .environmentObject(authManager)
             }
         }
     }

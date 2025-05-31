@@ -91,9 +91,16 @@ struct ExercisesPickerView: View {
         errorMessage = nil
         
         do {
+            guard let userId = try? await supabase.client.auth.session.user.id else {
+                errorMessage = "User not authenticated"
+                isLoading = false
+                return
+            }
+            
             let fetchedExercises: [Exercise] = try await supabase.client
                 .from("exercises")
                 .select("*")
+                .or("is_global.eq.true,created_by_user_id.eq.\(userId)")
                 .order("name", ascending: true)
                 .execute()
                 .value

@@ -1,180 +1,209 @@
 import Foundation
 import SwiftUI
-
-// Chat message types
-enum ChatMessage: Identifiable {
-    case user(String)
-    case ai(String)
-    case error(String)
-    case routine(AIRoutineResponse)
-    
-    var id: UUID { UUID() }
-    
-    var isUser: Bool {
-        if case .user = self { return true }
-        return false
-    }
-}
+import Network
 
 @MainActor
 final class AICoachViewModel: ObservableObject {
-    @Published var messages: [ChatMessage] = []
+    @Published var messages: [AIMessage] = []
     @Published var isThinking = false
+    @Published var isOffline = false
+    @Published var hasError = false
+    @Published var errorMessage = ""
+    
+    private let service = AICoachService.shared
+    private let monitor = NWPathMonitor()
+    private let monitorQueue = DispatchQueue(label: "NetworkMonitor")
+    
+    // Maintain full conversation for context
+    private var conversation: [ConversationMessage] = []
     
     init() {
         // Add welcome message
-        messages.append(.ai("Hi! I'm your AI workout coach. Tell me about your fitness goals, available equipment, and how much time you have, and I'll create a personalized workout for you!"))
+        messages.append(AIMessage(type: .assistantText(
+            "Hi! I'm your AI fitness coach. I can help you with:\n\n" +
+            "• Creating personalized workouts\n" +
+            "• Answering fitness questions\n" +
+            "• Suggesting recovery routines if you're sore\n" +
+            "• Providing stretching exercises\n\n" +
+            "What would you like help with today?"
+        )))
+        
+        // Start network monitoring
+        setupNetworkMonitoring()
+    }
+    
+    private func setupNetworkMonitoring() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            DispatchQueue.main.async {
+                self?.isOffline = path.status != .satisfied
+            }
+        }
+        monitor.start(queue: monitorQueue)
+    }
+    
+    deinit {
+        monitor.cancel()
     }
     
     func send(_ text: String) async {
         guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         
-        messages.append(.user(text))
+        // Add user message
+        let userMessage = AIMessage(type: .user(text))
+        messages.append(userMessage)
+        conversation.append(ConversationMessage(role: "user", content: text))
+        
+        // Check network status
+        if isOffline {
+            handleOfflineError()
+            return
+        }
+        
         isThinking = true
+        hasError = false
         
         do {
-            // Parse user input for structured data
-            let req = parseUserInput(text)
-            let routine = try await AICoachService.generateRoutine(req)
+            let response = try await service.send(conversation: conversation)
             
-            // Add routine as a special message type
-            messages.append(.routine(routine))
+            // Add AI response
+            messages.append(response)
             
-            // Add follow-up message
-            messages.append(.ai("I've created a \(routine.name) workout for you! This routine includes \(routine.exercises.count) exercises. Would you like to start this workout now or save it as a routine?"))
+            // Add to conversation history for context
+            switch response.type {
+            case .assistantText(let text):
+                conversation.append(ConversationMessage(role: "assistant", content: text))
+            case .routine(let routine):
+                conversation.append(ConversationMessage(role: "assistant", content: "I've created a \(routine.name) workout for you."))
+            case .recovery(let plan):
+                conversation.append(ConversationMessage(role: "assistant", content: "I've created a recovery plan: \(plan.title)"))
+            default:
+                break
+            }
             
         } catch {
-            messages.append(.error("I couldn't generate a workout plan. Please try again or check your internet connection."))
-            print("AI Coach Error: \(error)")
+            handleError(error)
         }
         
         isThinking = false
     }
     
-    // Add method to append messages from external sources
-    func addMessage(_ message: ChatMessage) async {
-        await MainActor.run {
-            messages.append(message)
-        }
-    }
-    
-    private func parseUserInput(_ text: String) -> RoutineRequest {
-        // More sophisticated parsing
-        var equipment: String? = nil
-        var minutes: Int? = nil
-        var soreness: String? = nil
+    private func handleError(_ error: Error) {
+        hasError = true
         
-        let lowercased = text.lowercased()
-        
-        // Detect equipment mentions with better matching
-        if lowercased.contains("dumbbell") || lowercased.contains("dumbell") {
-            equipment = "Dumbbell"
-        } else if lowercased.contains("barbell") {
-            equipment = "Barbell"
-        } else if lowercased.contains("bodyweight") || lowercased.contains("no equipment") || lowercased.contains("body weight") {
-            equipment = "None"
-        } else if lowercased.contains("gym") || lowercased.contains("full gym") {
-            equipment = "Full Gym"
-        } else if lowercased.contains("cable") {
-            equipment = "Cable"
-        } else if lowercased.contains("machine") {
-            equipment = "Machine"
-        } else if lowercased.contains("kettlebell") {
-            equipment = "Kettlebell"
-        } else if lowercased.contains("band") || lowercased.contains("resistance") {
-            equipment = "Bands"
-        }
-        
-        // Detect time mentions - improved regex
-        let timePatterns = [
-            #"(\d+)\s*(?:min|minute|minutes)"#,
-            #"(\d+)\s*(?:hr|hour|hours)"#,
-            #"(?:for|about|around)\s*(\d+)"#
-        ]
-        
-        for pattern in timePatterns {
-            if let range = lowercased.range(of: pattern, options: .regularExpression) {
-                let match = String(lowercased[range])
-                if let number = Int(match.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()) {
-                    if match.contains("hr") || match.contains("hour") {
-                        minutes = number * 60
-                    } else {
-                        minutes = number
-                    }
-                    break
+        // Determine error type and provide appropriate fallback
+        if let nsError = error as NSError? {
+            if nsError.domain == NSURLErrorDomain {
+                switch nsError.code {
+                case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost:
+                    handleOfflineError()
+                    return
+                case NSURLErrorTimedOut:
+                    errorMessage = "The request timed out. Please try again."
+                default:
+                    errorMessage = "Network error. Please check your connection."
                 }
-            }
-        }
-        
-        // Detect soreness - more comprehensive
-        if lowercased.contains("sore") {
-            var soreAreas: [String] = []
-            
-            // Check for specific body parts
-            let bodyParts = [
-                "leg": ["leg", "quad", "hamstring", "glute", "calf", "thigh"],
-                "chest": ["chest", "pec"],
-                "back": ["back", "lat", "trap"],
-                "shoulder": ["shoulder", "delt"],
-                "arm": ["arm", "bicep", "tricep"],
-                "core": ["core", "ab", "stomach"]
-            ]
-            
-            for (area, keywords) in bodyParts {
-                for keyword in keywords {
-                    if lowercased.contains(keyword) {
-                        soreAreas.append(area)
-                        break
-                    }
-                }
-            }
-            
-            if soreAreas.isEmpty {
-                soreness = lowercased.contains("very") || lowercased.contains("really") ? "High" : "Moderate"
             } else {
-                soreness = "Sore in: \(soreAreas.joined(separator: ", "))"
+                errorMessage = nsError.localizedDescription
+            }
+        } else {
+            errorMessage = "Something went wrong. Please try again."
+        }
+        
+        // Add error message
+        messages.append(AIMessage(type: .error(errorMessage)))
+        
+        // Add helpful fallback
+        addFallbackMessage()
+    }
+    
+    private func handleOfflineError() {
+        hasError = true
+        isOffline = true
+        errorMessage = "You appear to be offline."
+        
+        messages.append(AIMessage(type: .error("No internet connection")))
+        
+        // Provide offline fallback suggestions
+        messages.append(AIMessage(type: .assistantText(
+            "I'm unable to connect right now, but here are some general workout ideas you can try:\n\n" +
+            "**Full Body (No Equipment):**\n" +
+            "• Push-ups: 3 sets × 10-15 reps\n" +
+            "• Bodyweight Squats: 3 sets × 15-20 reps\n" +
+            "• Lunges: 3 sets × 10 reps each leg\n" +
+            "• Plank: 3 sets × 30-60 seconds\n" +
+            "• Mountain Climbers: 3 sets × 20 reps\n\n" +
+            "**Upper Body (Dumbbells):**\n" +
+            "• Dumbbell Press: 3 sets × 8-12 reps\n" +
+            "• Bent-Over Rows: 3 sets × 10-12 reps\n" +
+            "• Shoulder Press: 3 sets × 10-12 reps\n" +
+            "• Bicep Curls: 3 sets × 12-15 reps\n" +
+            "• Tricep Extensions: 3 sets × 12-15 reps\n\n" +
+            "Remember to warm up before exercising and cool down afterwards!"
+        )))
+    }
+    
+    private func addFallbackMessage() {
+        // Add a helpful fallback based on the last user message
+        if let lastUserMessage = messages.reversed().first(where: { $0.isUser }),
+           case .user(let text) = lastUserMessage.type {
+            
+            let lowercased = text.lowercased()
+            
+            if lowercased.contains("hurt") || lowercased.contains("pain") || lowercased.contains("sore") {
+                messages.append(AIMessage(type: .assistantText(
+                    "While I couldn't process your request online, here's some general advice for soreness:\n\n" +
+                    "• Rest the affected area for 24-48 hours\n" +
+                    "• Apply ice for 15-20 minutes several times a day\n" +
+                    "• Gentle stretching once acute pain subsides\n" +
+                    "• Stay hydrated\n" +
+                    "• Consider light movement like walking\n\n" +
+                    "If pain persists or worsens, please consult a healthcare professional."
+                )))
+            } else if lowercased.contains("stretch") {
+                messages.append(AIMessage(type: .assistantText(
+                    "Here are some basic stretches you can try:\n\n" +
+                    "• Hamstring Stretch: 30 seconds each leg\n" +
+                    "• Quad Stretch: 30 seconds each leg\n" +
+                    "• Shoulder Stretch: 30 seconds each arm\n" +
+                    "• Chest Doorway Stretch: 30 seconds\n" +
+                    "• Cat-Cow Stretch: 10 reps\n" +
+                    "• Child's Pose: Hold for 1 minute\n\n" +
+                    "Remember to breathe deeply and never force a stretch!"
+                )))
+            } else {
+                messages.append(AIMessage(type: .assistantText(
+                    "I'm having trouble connecting right now. You can still:\n\n" +
+                    "• Start an empty workout and add exercises manually\n" +
+                    "• Use one of your saved routines\n" +
+                    "• Try again when you have a better connection\n\n" +
+                    "Stay consistent with your fitness journey! 💪"
+                )))
             }
         }
-        
-        return RoutineRequest(
-            goal: text,
-            equipment: equipment,
-            soreness: soreness,
-            minutes: minutes
-        )
     }
     
-    func startWorkoutFromRoutine(_ routine: AIRoutineResponse) async {
-        // Convert AI routine to actual workout
-        messages.append(.ai("Great! I'm preparing your workout. One moment..."))
+    // Method to retry last message
+    func retryLastMessage() async {
+        guard let lastUserMessage = conversation.last(where: { $0.role == "user" }) else { return }
         
-        // We'll need to match exercise names to database exercises
-        // For now, just show a message
-        messages.append(.ai("Ready to start! Head to the Log tab and tap 'Start an Empty Workout'. Then add these exercises:\n\n" + routine.prettyDescription))
-    }
-    
-    func saveAsRoutine(_ routine: AIRoutineResponse) async {
-        messages.append(.ai("Saving this routine for future use..."))
-        
-        // TODO: Implement actual save functionality
-        // This will require matching exercises to database and creating routine records
-        
-        messages.append(.ai("I've noted this routine for you. In the next update, you'll be able to save it directly to your routines!"))
-    }
-    
-    // Add method to fetch available exercises
-    func fetchAvailableExercises() async -> [Exercise] {
-        do {
-            let exercises: [Exercise] = try await SupabaseManager.shared.client
-                .from("exercises")
-                .select()
-                .execute()
-                .value
-            return exercises
-        } catch {
-            print("Error fetching exercises: \(error)")
-            return []
+        // Remove error messages
+        messages.removeAll { message in
+            if case .error = message.type { return true }
+            return false
         }
+        
+        // Resend
+        await send(lastUserMessage.content)
+    }
+    
+    // Clear conversation and start fresh
+    func clearConversation() {
+        messages = [AIMessage(type: .assistantText(
+            "Hi! I'm your AI fitness coach. How can I help you today?"
+        ))]
+        conversation = []
+        hasError = false
+        errorMessage = ""
     }
 }
 

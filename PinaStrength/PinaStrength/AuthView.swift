@@ -4,11 +4,12 @@ import Supabase
 struct AuthView: View {
     @State private var email = ""
     @State private var password = ""
+    @State private var fullName = ""
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var isSignUp = false
     
-    let onAuthenticated: () -> Void
+    @EnvironmentObject var authManager: AuthManager
     
     var body: some View {
         NavigationStack {
@@ -31,6 +32,13 @@ struct AuthView: View {
                 
                 // Form fields
                 VStack(spacing: 16) {
+                    if isSignUp {
+                        TextField("Full Name", text: $fullName)
+                            .textFieldStyle(.roundedBorder)
+                            .textContentType(.name)
+                            .autocapitalization(.words)
+                    }
+                    
                     TextField("Email", text: $email)
                         .textFieldStyle(.roundedBorder)
                         .textContentType(.emailAddress)
@@ -49,6 +57,16 @@ struct AuthView: View {
                         .font(.caption)
                         .foregroundColor(.red)
                         .padding(.horizontal)
+                        .multilineTextAlignment(.center)
+                }
+                
+                // Auth error from AuthManager
+                if let authError = authManager.authError {
+                    Text(authError)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .padding(.horizontal)
+                        .multilineTextAlignment(.center)
                 }
                 
                 // Action buttons
@@ -67,9 +85,12 @@ struct AuthView: View {
                     .background(Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(10)
-                    .disabled(isLoading || email.isEmpty || password.isEmpty)
+                    .disabled(isLoading || email.isEmpty || password.isEmpty || (isSignUp && fullName.isEmpty))
                     
-                    Button(action: { isSignUp.toggle() }) {
+                    Button(action: { 
+                        isSignUp.toggle()
+                        errorMessage = nil
+                    }) {
                         Text(isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up")
                             .font(.subheadline)
                             .foregroundColor(.blue)
@@ -90,24 +111,20 @@ struct AuthView: View {
         Task {
             do {
                 if isSignUp {
-                    _ = try await SupabaseManager.shared.client.auth.signUp(
+                    try await authManager.signUp(
                         email: email,
-                        password: password
-                    )
-                    // After signup, sign in automatically
-                    _ = try await SupabaseManager.shared.client.auth.signIn(
-                        email: email,
-                        password: password
+                        password: password,
+                        fullName: fullName.isEmpty ? nil : fullName
                     )
                 } else {
-                    _ = try await SupabaseManager.shared.client.auth.signIn(
+                    try await authManager.signIn(
                         email: email,
                         password: password
                     )
                 }
                 
                 await MainActor.run {
-                    onAuthenticated()
+                    isLoading = false
                 }
             } catch {
                 await MainActor.run {
@@ -122,6 +139,7 @@ struct AuthView: View {
 // MARK: - Preview
 struct AuthView_Previews: PreviewProvider {
     static var previews: some View {
-        AuthView(onAuthenticated: {})
+        AuthView()
+            .environmentObject(AuthManager())
     }
 } 

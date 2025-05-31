@@ -188,7 +188,7 @@ struct CreateEditRoutineView: View {
                             exercisesInRoutine.append(exercise)
                             // Add one default set template when an exercise is added
                             if setTemplates[exercise.id] == nil {
-                                setTemplates[exercise.id] = [RoutineSetTemplateInput()]
+                                setTemplates[exercise.id] = [RoutineSetTemplateInput(routineExerciseId: UUID(), userId: UUID())]
                             }
                         }
                     }
@@ -199,7 +199,7 @@ struct CreateEditRoutineView: View {
     }
 
     func addSetTemplate(for exerciseId: UUID) {
-        setTemplates[exerciseId, default: []].append(RoutineSetTemplateInput())
+        setTemplates[exerciseId, default: []].append(RoutineSetTemplateInput(routineExerciseId: UUID(), userId: UUID()))
     }
 
     func saveRoutine() async {

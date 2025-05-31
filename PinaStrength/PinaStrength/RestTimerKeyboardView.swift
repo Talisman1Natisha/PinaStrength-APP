@@ -66,7 +66,7 @@ struct RestTimerKeyboardView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .frame(height: buttonHeight)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.blue))
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: "#F28C28")))
                 }
             }
         }

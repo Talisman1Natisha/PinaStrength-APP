@@ -1,11 +1,40 @@
 import SwiftUI
 import Supabase
 
+// MARK: - Color Extension for Hex Support
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: // RGB (24-bit)
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: // ARGB (32-bit)
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (1, 1, 1, 0)
+        }
+
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue:  Double(b) / 255,
+            opacity: Double(a) / 255
+        )
+    }
+}
+
 // MARK: - Modern Exercise Row View
 
 struct ModernExerciseRow: View {
     let exercise: Exercise
     let isSelected: Bool
+    let onDelete: ((Exercise) -> Void)?
     
     private var iconName: String {
         switch exercise.category?.lowercased() {
@@ -22,7 +51,7 @@ struct ModernExerciseRow: View {
     
     private var categoryColor: Color {
         switch exercise.category?.lowercased() {
-        case "barbell": return .blue
+        case "barbell": return Color(hex: "#F28C28")
         case "dumbbell": return .purple
         case "cable": return .orange
         case "machine": return .red
@@ -68,10 +97,24 @@ struct ModernExerciseRow: View {
             
             // Exercise info
             VStack(alignment: .leading, spacing: 4) {
-                Text(exercise.name)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
+                HStack(alignment: .center, spacing: 8) {
+                    Text(exercise.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    
+                    if exercise.isCustomExercise {
+                        Text("CUSTOM")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.blue)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.1))
+                            .clipShape(Capsule())
+                    }
+                    
+                    Spacer()
+                }
                 
                 HStack(spacing: 8) {
                     if let bodyPart = exercise.bodyPart, !bodyPart.isEmpty {
@@ -88,13 +131,11 @@ struct ModernExerciseRow: View {
                 }
             }
             
-            Spacer()
-            
             // Selection indicator or chevron
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 24))
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color(hex: "#F28C28"))
             } else {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14))
@@ -110,8 +151,17 @@ struct ModernExerciseRow: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                .stroke(isSelected ? Color(hex: "#F28C28") : Color.clear, lineWidth: 2)
         )
+        .contextMenu {
+            if exercise.isCustomExercise {
+                Button(role: .destructive) {
+                    onDelete?(exercise)
+                } label: {
+                    Label("Delete Exercise", systemImage: "trash")
+                }
+            }
+        }
     }
 }
 
@@ -129,11 +179,16 @@ struct ExercisesView: View {
     @State private var showCreateModal: Bool = false
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
+    @State private var showDeleteConfirmation = false
+    @State private var exerciseToDelete: Exercise?
+    @State private var isDeleting = false
     
     @State private var currentlySelectedExercises: [Exercise] = []
     @State private var presentedExercise: Exercise? = nil // For sheet presentation
+    @State private var fetchTask: Task<Void, Never>? = nil // Track the fetch task
 
     private let client = SupabaseManager.shared.client
+    private let secureDataService = SecureDataService()
     private let bodyParts = ["All", "Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Full Body", "Cardio", "Olympic", "Other"]
     private let categories = ["All", "Barbell", "Dumbbell", "Cable", "Machine", "Bodyweight", "Kettlebell", "Bands"]
 
@@ -171,7 +226,7 @@ struct ExercisesView: View {
                                         if selectedBodyPart == part {
                                             Spacer()
                                             Image(systemName: "checkmark")
-                                                .foregroundColor(.blue)
+                                                .foregroundColor(Color(hex: "#F28C28"))
                                         }
                                     }
                                 }
@@ -186,7 +241,7 @@ struct ExercisesView: View {
                                 Image(systemName: "chevron.down")
                                     .font(.system(size: 12))
                             }
-                            .foregroundColor(selectedBodyPart == "All" ? .secondary : .blue)
+                            .foregroundColor(selectedBodyPart == "All" ? .secondary : Color(hex: "#F28C28"))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(
@@ -194,7 +249,7 @@ struct ExercisesView: View {
                                     .fill(Color(.systemBackground))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 10)
-                                            .stroke(selectedBodyPart == "All" ? Color(.systemGray4) : Color.blue.opacity(0.3), lineWidth: 1)
+                                            .stroke(selectedBodyPart == "All" ? Color(.systemGray4) : Color(hex: "#F28C28").opacity(0.3), lineWidth: 1)
                                     )
                             )
                         }
@@ -208,7 +263,7 @@ struct ExercisesView: View {
                                         if selectedCategory == category {
                                             Spacer()
                                             Image(systemName: "checkmark")
-                                                .foregroundColor(.blue)
+                                                .foregroundColor(Color(hex: "#F28C28"))
                                         }
                                     }
                                 }
@@ -223,7 +278,7 @@ struct ExercisesView: View {
                                 Image(systemName: "chevron.down")
                                     .font(.system(size: 12))
                             }
-                            .foregroundColor(selectedCategory == "All" ? .secondary : .blue)
+                            .foregroundColor(selectedCategory == "All" ? .secondary : Color(hex: "#F28C28"))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(
@@ -231,7 +286,7 @@ struct ExercisesView: View {
                                     .fill(Color(.systemBackground))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 10)
-                                            .stroke(selectedCategory == "All" ? Color(.systemGray4) : Color.blue.opacity(0.3), lineWidth: 1)
+                                            .stroke(selectedCategory == "All" ? Color(.systemGray4) : Color(hex: "#F28C28").opacity(0.3), lineWidth: 1)
                                     )
                             )
                         }
@@ -245,7 +300,7 @@ struct ExercisesView: View {
                         Spacer()
                         ProgressView()
                             .scaleEffect(1.5)
-                            .progressViewStyle(CircularProgressViewStyle(tint: .blue))
+                            .progressViewStyle(CircularProgressViewStyle(tint: Color(hex: "#F28C28")))
                         Text("Loading exercises...")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
@@ -285,16 +340,21 @@ struct ExercisesView: View {
                                 ForEach(filteredExercises) { exercise in
                                     ModernExerciseRow(
                                         exercise: exercise,
-                                        isSelected: currentlySelectedExercises.contains(where: { $0.id == exercise.id })
+                                        isSelected: currentlySelectedExercises.contains(where: { $0.id == exercise.id }),
+                                        onDelete: { exerciseToDelete in
+                                            self.exerciseToDelete = exerciseToDelete
+                                            self.showDeleteConfirmation = true
+                                        }
                                     )
-                    .onTapGesture {
-                        if isSelectionMode {
-                            toggleSelection(for: exercise)
-                        } else {
+                                    .onTapGesture {
+                                        if isSelectionMode {
+                                            toggleSelection(for: exercise)
+                                        } else {
                                             presentedExercise = exercise
                                         }
                                     }
                                 }
+                                .onDelete(perform: deleteExercises)
                             }
                             .padding(.horizontal)
                             .padding(.vertical, 8)
@@ -321,7 +381,7 @@ struct ExercisesView: View {
                                 Text("Add")
                                 if !currentlySelectedExercises.isEmpty {
                                     Text("(\(currentlySelectedExercises.count))")
-                                        .foregroundColor(.blue)
+                                        .foregroundColor(Color(hex: "#F28C28"))
                                 }
                             }
                             .fontWeight(.semibold)
@@ -335,7 +395,7 @@ struct ExercisesView: View {
                         } label: {
                             Image(systemName: "plus.circle.fill")
                                 .font(.system(size: 22))
-                                .foregroundColor(.blue)
+                                .foregroundColor(Color(hex: "#F28C28"))
                         }
                     }
                 }
@@ -358,7 +418,44 @@ struct ExercisesView: View {
                     .presentationDragIndicator(.visible)
             }
             .task {
-                await fetchExercises()
+                // Cancel any existing fetch task
+                fetchTask?.cancel()
+                
+                // Create new fetch task
+                fetchTask = Task {
+                    await fetchExercises()
+                }
+            }
+            .onDisappear {
+                // Cancel the fetch task when view disappears
+                fetchTask?.cancel()
+                fetchTask = nil
+            }
+            .alert("Delete Exercise", isPresented: $showDeleteConfirmation) {
+                Button("Cancel", role: .cancel) {
+                    exerciseToDelete = nil
+                }
+                Button("Delete", role: .destructive) {
+                    if let exercise = exerciseToDelete {
+                        Task {
+                            await confirmDeleteExercise(exercise)
+                        }
+                    }
+                }
+            } message: {
+                if let exercise = exerciseToDelete {
+                    Text("Are you sure you want to delete '\(exercise.name)'? This action cannot be undone.")
+                }
+            }
+            .overlay {
+                if isDeleting {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                    ProgressView("Deleting exercise...")
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .cornerRadius(10)
+                }
             }
         }
     }
@@ -372,15 +469,37 @@ struct ExercisesView: View {
     }
 
     func fetchExercises() async {
+        // Check if task is cancelled before starting
+        if Task.isCancelled { return }
+        
         isLoading = true
         errorMessage = nil
         do {
-            // Using the new Supabase API
+            guard let userId = try? await client.auth.session.user.id else {
+                errorMessage = "User not authenticated"
+                isLoading = false
+                return
+            }
+            
+            // Check again before making network request
+            if Task.isCancelled { 
+                isLoading = false
+                return 
+            }
+            
+            // Fetch global exercises and user's custom exercises
             let fetchedExercisesData: [Exercise] = try await client
                 .from("exercises")
                 .select()
+                .or("is_global.eq.true,created_by_user_id.eq.\(userId)")
                 .execute()
                 .value
+            
+            // Check if cancelled before updating UI
+            if Task.isCancelled { 
+                isLoading = false
+                return 
+            }
             
             await MainActor.run {
                 self.exercises = fetchedExercisesData
@@ -388,9 +507,58 @@ struct ExercisesView: View {
             }
         } catch {
             await MainActor.run {
-                self.errorMessage = error.localizedDescription
-                self.isLoading = false
-                print("Error fetching exercises: \(error)")
+                // Check if it's a cancellation error
+                let nsError = error as NSError
+                if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
+                    // This is just a cancelled request, not a real error
+                    // Don't show error message for cancellations
+                    self.isLoading = false
+                } else {
+                    // This is a real error, show it
+                    self.errorMessage = error.localizedDescription
+                    self.isLoading = false
+                    print("Error fetching exercises: \(error)")
+                }
+            }
+        }
+    }
+
+    private func deleteExercises(at offsets: IndexSet) {
+        guard let index = offsets.first else { return }
+        let exercise = filteredExercises[index]
+        
+        // Only allow deletion of custom exercises
+        if exercise.isCustomExercise {
+            exerciseToDelete = exercise
+            showDeleteConfirmation = true
+        }
+    }
+    
+    private func confirmDeleteExercise(_ exercise: Exercise) async {
+        isDeleting = true
+        
+        do {
+            try await secureDataService.deleteCustomExercise(exerciseId: exercise.id)
+            
+            // Remove from local array
+            DispatchQueue.main.async {
+                if let index = self.exercises.firstIndex(where: { $0.id == exercise.id }) {
+                    self.exercises.remove(at: index)
+                }
+                
+                // Also remove from selected exercises if it was selected
+                if let selectedIndex = self.currentlySelectedExercises.firstIndex(where: { $0.id == exercise.id }) {
+                    self.currentlySelectedExercises.remove(at: selectedIndex)
+                }
+                
+                self.exerciseToDelete = nil
+                self.isDeleting = false
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.errorMessage = "Failed to delete exercise: \(error.localizedDescription)"
+                self.exerciseToDelete = nil
+                self.isDeleting = false
             }
         }
     }
@@ -419,6 +587,7 @@ struct CreateExerciseView: View {
         let category: String?
         let instructions: String?
         let created_by_user_id: UUID
+        let is_global: Bool = false  // Custom exercises are always private to the user
     }
 
     var body: some View {
@@ -432,12 +601,12 @@ struct CreateExerciseView: View {
                     VStack(spacing: 8) {
                         ZStack {
                             Circle()
-                                .fill(Color.blue.opacity(0.1))
+                                .fill(Color(hex: "#F28C28").opacity(0.1))
                                 .frame(width: 80, height: 80)
                             
                             Image(systemName: "figure.strengthtraining.traditional")
                                 .font(.system(size: 40))
-                                .foregroundColor(.blue)
+                                .foregroundColor(Color(hex: "#F28C28"))
                         }
                         
                         Text("Create New Exercise")
@@ -599,7 +768,7 @@ struct CreateExerciseView: View {
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(name.isEmpty ? Color.gray : Color.blue)
+                                .fill(name.isEmpty ? Color.gray : Color(hex: "#F28C28"))
                         )
                         .foregroundColor(.white)
                 .disabled(name.isEmpty || isSubmitting)

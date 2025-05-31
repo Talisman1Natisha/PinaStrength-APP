@@ -58,7 +58,7 @@ struct RestTimerBarView: View {
                 .fill(Color(.systemGray5))
             GeometryReader { geo in
                 Capsule()
-                    .fill(Color(.systemBlue).opacity(0.9))
+                    .fill(Color.green)
                     .frame(width: geo.size.width * progress)
                     .animation(.linear(duration: 1), value: remaining)
             }
@@ -67,7 +67,7 @@ struct RestTimerBarView: View {
                 .font(.caption.monospacedDigit())
                 .foregroundColor(.white)
         }
-        .frame(height: 14)
+        .frame(height: 6)
         .padding(.vertical, 6)
         .contentShape(Rectangle())
         .onTapGesture {
@@ -144,9 +144,9 @@ struct ExerciseSetRowView: View {
     
     private var rowBackground: Color {
         if setInput.isCompleted { 
-            return Color(.systemGreen).opacity(0.12) 
+            return Color.green.opacity(0.12) 
         } else if isRowFocused { 
-            return Color(.systemBlue).opacity(0.07) 
+            return Color(hex: "#F28C28").opacity(0.07) 
         } else { 
             return Color(.systemBackground) 
         }
@@ -169,7 +169,7 @@ struct ExerciseSetRowView: View {
                         if let prev = previousSetData { 
                             Text("\(String(format: "%.1f", prev.weight)) x \(prev.reps)")
                                 .font(.caption)
-                                .foregroundColor(.blue)
+                                .foregroundColor(Color(hex: "#F28C28"))
                         } else { 
                             Text("-")
                                 .font(.caption)
@@ -180,29 +180,41 @@ struct ExerciseSetRowView: View {
                     .buttonStyle(.plain)
                     
                     Text(setInput.weight.isEmpty ? weightPlaceholder : setInput.weight)
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .monospacedDigit()
                         .frame(maxWidth: .infinity, minHeight: 30, alignment: .center)
                         .padding(EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8))
-                        .background(isActiveField(for: .lbs) ? Color.yellow.opacity(0.3) : Color(UIColor.systemGray6))
+                        .background(isActiveField(for: .lbs) ? Color(hex: "#F28C28").opacity(0.3) : Color(UIColor.systemGray6))
                         .cornerRadius(6)
                         .foregroundColor(setInput.weight.isEmpty ? .gray : .primary)
+                        .overlay(
+                            isActiveField(for: .lbs) ? 
+                            RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "#F28C28"), lineWidth: 2) : nil
+                        )
                         .onTapGesture { 
                             onRequestKeyboard(exerciseId, setInput.id, .lbs)
                             onBecameActive?(setInput.id)
                         }
 
                     Text(setInput.reps.isEmpty ? repsPlaceholder : setInput.reps)
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .monospacedDigit()
                         .frame(maxWidth: .infinity, minHeight: 30, alignment: .center)
                         .padding(EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8))
-                        .background(isActiveField(for: .reps) ? Color.yellow.opacity(0.3) : Color(UIColor.systemGray6))
+                        .background(isActiveField(for: .reps) ? Color(hex: "#F28C28").opacity(0.3) : Color(UIColor.systemGray6))
                         .cornerRadius(6)
                         .foregroundColor(setInput.reps.isEmpty ? .gray : .primary)
+                        .overlay(
+                            isActiveField(for: .reps) ? 
+                            RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "#F28C28"), lineWidth: 2) : nil
+                        )
                         .onTapGesture { 
                             onRequestKeyboard(exerciseId, setInput.id, .reps)
                             onBecameActive?(setInput.id)
                         }
 
                     Image(systemName: setInput.isCompleted ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(setInput.isCompleted ? .green : .gray)
+                        .foregroundColor(setInput.isCompleted ? Color.green : .gray)
                         .frame(minWidth: 30, alignment: .trailing)
                         .onTapGesture { onToggleCompletion(exerciseId, setInput.id) }
                 }
@@ -266,9 +278,27 @@ struct ExerciseSectionView: View {
     let onRequestKeyboard: (UUID, UUID, FieldType) -> Void
     let onToggleCompletion: (UUID, UUID) -> Void
     let onFillFromPrevious: (UUID, UUID) -> Void
+    let onShowExerciseDetail: ((Exercise) -> Void)? // New callback for exercise detail
 
     var body: some View {
-        Section(header: Text(exercise.name).font(.title3).fontWeight(.medium)) {
+        Section(header: 
+            Button(action: { onShowExerciseDetail?(exercise) }) {
+                HStack {
+                    Text(exercise.name)
+                        .font(.title2)
+                        .bold()
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.leading)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 16))
+                        .foregroundColor(Color(hex: "#F28C28"))
+                }
+            }
+            .buttonStyle(.plain)
+        ) {
             // Column headers
             HStack {
                 Text("Set").frame(maxWidth: .infinity, alignment: .leading)
@@ -347,8 +377,7 @@ struct LogWorkoutView: View {
     
     // Grid layout
     private let gridColumns = [
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16)
+        GridItem(.adaptive(minimum: 150), spacing: 16)
     ]
 
     var body: some View {
@@ -381,6 +410,7 @@ struct LogWorkoutView: View {
                 .padding(.horizontal)
                 .padding(.top, 8)
             }
+            .background(Color(.systemBackground))
             .navigationTitle("Start Workout")
             .navigationBarTitleDisplayMode(.large)
             .refreshable {
@@ -464,9 +494,8 @@ struct LogWorkoutView: View {
                 Text("Start an Empty Workout")
                     .font(.headline)
                     .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.blue)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Color.accentColor)
                     .cornerRadius(12)
             }
             .disabled(isStartingWorkout)
@@ -484,11 +513,11 @@ struct LogWorkoutView: View {
                 HStack(spacing: 16) {
                     Image(systemName: "message.badge.waveform")
                         .font(.system(size: 24))
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color(hex: "#F28C28"))
                         .frame(width: 44, height: 44)
                         .background(
                             Circle()
-                                .fill(Color.blue.opacity(0.1))
+                                .fill(Color(hex: "#F28C28").opacity(0.1))
                         )
                     
                     VStack(alignment: .leading, spacing: 4) {
@@ -534,10 +563,10 @@ struct LogWorkoutView: View {
                         Text("Routine")
                     }
                     .font(.subheadline.weight(.medium))
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color(hex: "#F28C28"))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.blue.opacity(0.1))
+                    .background(Color(hex: "#F28C28").opacity(0.1))
                     .cornerRadius(16)
                 }
                 
@@ -602,10 +631,10 @@ struct LogWorkoutView: View {
                         Text("Create Routine")
                     }
                     .font(.subheadline.weight(.medium))
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color(hex: "#F28C28"))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Color.blue.opacity(0.1))
+                    .background(Color(hex: "#F28C28").opacity(0.1))
                     .cornerRadius(20)
                 }
             }
@@ -673,8 +702,10 @@ struct LogWorkoutView: View {
                 guard let exercise = routineExercise.exercise else { return nil }
                 return RoutineExerciseDetailItem(
                     id: routineExercise.id,
+                    routineId: routine.id,
                     exerciseId: exercise.id,
                     exerciseName: exercise.name,
+                    userId: routine.user_id,
                     orderIndex: routineExercise.orderIndex,
                     setTemplates: [] // TODO: Add set templates support
                 )

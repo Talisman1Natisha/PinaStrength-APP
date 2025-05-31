@@ -16,9 +16,13 @@ struct RoutinesView: View {
     @State private var isLoading: Bool = true
     @State private var errorMessage: String? = nil
     @State private var showingCreateRoutineView = false
+    @State private var showDeleteConfirmation = false
+    @State private var routineToDelete: RoutineListItem?
+    @State private var isDeleting = false
     // No longer need selectedRoutine if using NavigationLink directly for detail
 
     private let client = SupabaseManager.shared.client
+    private let secureDataService = SecureDataService()
 
     var body: some View {
         // NavigationStack should be provided by ContentView
@@ -44,13 +48,41 @@ struct RoutinesView: View {
                 List {
                     ForEach(routines) { routine in
                         NavigationLink(destination: RoutineDetailView(routine: routine)) {
-                            VStack(alignment: .leading) {
-                                Text(routine.name).font(.headline)
-                                Text("Last updated: \(routine.updatedAt, style: .relative) ago")
-                                    .font(.caption).foregroundColor(.gray)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(routine.name)
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                
+                                HStack {
+                                    Text("Last updated: \(routine.updatedAt, style: .relative) ago")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                    
+                                    Spacer()
+                                    
+                                    if let description = routine.description, !description.isEmpty {
+                                        Text(description)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                routineToDelete = routine
+                                showDeleteConfirmation = true
+                            } label: {
+                                Label("Delete Routine", systemImage: "trash")
                             }
                         }
                     }
+                    .onDelete(perform: deleteRoutines)
+                }
+                .refreshable {
+                    await fetchRoutines()
                 }
             }
         }
@@ -78,6 +110,61 @@ struct RoutinesView: View {
         .task {
             await fetchRoutines()
         }
+        .alert("Delete Routine", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {
+                routineToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let routine = routineToDelete {
+                    Task {
+                        await confirmDeleteRoutine(routine)
+                    }
+                }
+            }
+        } message: {
+            if let routine = routineToDelete {
+                Text("Are you sure you want to delete '\(routine.name)'? This will also delete all exercises and sets in this routine. This action cannot be undone.")
+            }
+        }
+        .overlay {
+            if isDeleting {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                ProgressView("Deleting routine...")
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(10)
+            }
+        }
+    }
+
+    private func deleteRoutines(at offsets: IndexSet) {
+        guard let index = offsets.first else { return }
+        routineToDelete = routines[index]
+        showDeleteConfirmation = true
+    }
+    
+    private func confirmDeleteRoutine(_ routine: RoutineListItem) async {
+        isDeleting = true
+        
+        do {
+            try await secureDataService.deleteRoutine(routineId: routine.id)
+            
+            // Remove from local array
+            DispatchQueue.main.async {
+                if let index = self.routines.firstIndex(where: { $0.id == routine.id }) {
+                    self.routines.remove(at: index)
+                }
+                self.routineToDelete = nil
+                self.isDeleting = false
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.errorMessage = "Failed to delete routine: \(error.localizedDescription)"
+                self.routineToDelete = nil
+                self.isDeleting = false
+            }
+        }
     }
 
     func fetchRoutines() async {
@@ -92,7 +179,7 @@ struct RoutinesView: View {
         do {
             let fetchedRoutines: [RoutineListItem] = try await client.database
                 .from("routines")
-                .select("id, name, updated_at")
+                .select("*")
                 .eq("user_id", value: userId)
                 .order("updated_at", ascending: false)
                 .execute()

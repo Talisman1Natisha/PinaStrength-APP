@@ -40,8 +40,12 @@ struct HistoryView: View {
     @State private var pastWorkouts: [WorkoutLogRow] = []
     @State private var isLoading: Bool = true
     @State private var errorMessage: String? = nil
+    @State private var showDeleteConfirmation = false
+    @State private var workoutToDelete: WorkoutLogRow?
+    @State private var isDeleting = false
 
     private let client = SupabaseManager.shared.client
+    private let secureDataService = SecureDataService()
 
     // Formatter for duration
     private func formatDuration(_ interval: TimeInterval) -> String {
@@ -95,13 +99,80 @@ struct HistoryView: View {
                                 }
                             }
                         }
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                workoutToDelete = workoutLog
+                                showDeleteConfirmation = true
+                            } label: {
+                                Label("Delete Workout", systemImage: "trash")
+                            }
+                        }
                     }
+                    .onDelete(perform: deleteWorkouts)
+                }
+                .refreshable {
+                    await fetchPastWorkouts()
                 }
             }
         }
         .navigationTitle("History")
         .task {
             await fetchPastWorkouts()
+        }
+        .alert("Delete Workout", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {
+                workoutToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let workout = workoutToDelete {
+                    Task {
+                        await confirmDeleteWorkout(workout)
+                    }
+                }
+            }
+        } message: {
+            if let workout = workoutToDelete {
+                Text("Are you sure you want to delete '\(workout.displayName)'? This action cannot be undone.")
+            }
+        }
+        .overlay {
+            if isDeleting {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                ProgressView("Deleting workout...")
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(10)
+            }
+        }
+    }
+
+    func deleteWorkouts(at offsets: IndexSet) {
+        guard let index = offsets.first else { return }
+        workoutToDelete = pastWorkouts[index]
+        showDeleteConfirmation = true
+    }
+    
+    func confirmDeleteWorkout(_ workout: WorkoutLogRow) async {
+        isDeleting = true
+        
+        do {
+            try await secureDataService.deleteWorkout(workoutId: workout.id)
+            
+            // Remove from local array
+            DispatchQueue.main.async {
+                if let index = self.pastWorkouts.firstIndex(where: { $0.id == workout.id }) {
+                    self.pastWorkouts.remove(at: index)
+                }
+                self.workoutToDelete = nil
+                self.isDeleting = false
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.errorMessage = "Failed to delete workout: \(error.localizedDescription)"
+                self.workoutToDelete = nil
+                self.isDeleting = false
+            }
         }
     }
 

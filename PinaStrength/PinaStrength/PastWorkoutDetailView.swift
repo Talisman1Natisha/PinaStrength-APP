@@ -144,11 +144,18 @@ struct PastWorkoutDetailView: View {
         errorMessage = nil
 
         do {
+            guard let userId = try? await client.auth.session.user.id else {
+                errorMessage = "User not authenticated"
+                isLoading = false
+                return
+            }
+            
             // Step 1: Fetch the main workout info
             let mainWorkoutDataArray: [WorkoutLogRow] = try await client.database
                 .from("workouts")
                 .select("id, notes, date, end_time")
                 .eq("id", value: workoutLogId)
+                .eq("user_id", value: userId)
                 .limit(1) // Fetch at most one record
                 .execute()
                 .value
@@ -167,6 +174,7 @@ struct PastWorkoutDetailView: View {
                 .from("workout_exercises")
                 .select("id, exercise_id, order_index, exercises(name)") 
                 .eq("workout_id", value: workoutLogId)
+                .eq("user_id", value: userId)
                 .execute()
                 .value
             
@@ -176,6 +184,7 @@ struct PastWorkoutDetailView: View {
                     .from("workout_sets")
                     .select("id, set_number, weight, reps")
                     .eq("workout_exercise_id", value: weWithName.id)
+                    .eq("user_id", value: userId)
                     .order("set_number", ascending: true)
                     .execute()
                     .value

@@ -11,6 +11,20 @@ struct AICoachChatView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
+                // Error banner
+                if vm.hasError {
+                    ErrorBanner(
+                        message: vm.errorMessage,
+                        isOffline: vm.isOffline,
+                        onRetry: {
+                            Task {
+                                await vm.retryLastMessage()
+                            }
+                        }
+                    )
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                
                 // Messages list
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -45,7 +59,7 @@ struct AICoachChatView: View {
                 
                 // Input area
                 HStack(spacing: 12) {
-                    TextField("Tell me your fitness goals...", text: $input, axis: .vertical)
+                    TextField("Ask me anything about fitness...", text: $input, axis: .vertical)
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
@@ -82,6 +96,14 @@ struct AICoachChatView: View {
             .navigationTitle("AI Coach")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        vm.clearConversation()
+                    }) {
+                        Image(systemName: "arrow.counterclockwise")
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
                         dismiss()
@@ -95,9 +117,37 @@ struct AICoachChatView: View {
     }
 }
 
+// MARK: - Error Banner
+struct ErrorBanner: View {
+    let message: String
+    let isOffline: Bool
+    let onRetry: () -> Void
+    
+    var body: some View {
+        HStack {
+            Image(systemName: isOffline ? "wifi.slash" : "exclamationmark.triangle.fill")
+                .foregroundColor(.white)
+            
+            Text(message)
+                .font(.subheadline)
+                .foregroundColor(.white)
+            
+            Spacer()
+            
+            Button(action: onRetry) {
+                Text("Retry")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .padding()
+        .background(Color.red)
+    }
+}
+
 // MARK: - Chat Bubble View
 struct ChatBubble: View {
-    let message: ChatMessage
+    let message: AIMessage
     let viewModel: AICoachViewModel
     
     var body: some View {
@@ -116,7 +166,7 @@ struct ChatBubble: View {
     
     @ViewBuilder
     private var content: some View {
-        switch message {
+        switch message.type {
         case .user(let text):
             Text(text)
                 .padding(.horizontal, 16)
@@ -132,7 +182,7 @@ struct ChatBubble: View {
                     }
                 }
             
-        case .ai(let text):
+        case .assistantText(let text):
             Text(text)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -161,6 +211,79 @@ struct ChatBubble: View {
             
         case .routine(let routine):
             AIRoutineCard(routine: routine, viewModel: viewModel)
+            
+        case .recovery(let plan):
+            RecoveryPlanCard(plan: plan)
+        }
+    }
+}
+
+// MARK: - Recovery Plan Card
+struct RecoveryPlanCard: View {
+    let plan: RecoveryPlan
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(plan.title)
+                        .font(.headline)
+                    Text(plan.description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "heart.fill")
+                    .font(.title2)
+                    .foregroundColor(.red)
+            }
+            
+            Divider()
+            
+            // Activities list
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(plan.activities.enumerated()), id: \.offset) { index, activity in
+                    HStack(alignment: .top) {
+                        Image(systemName: iconForActivity(activity.type))
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                            .frame(width: 20)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(activity.name)
+                                .font(.subheadline.weight(.medium))
+                            Text(activity.duration)
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                            Text(activity.instructions)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        
+                        Spacer()
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        )
+    }
+    
+    private func iconForActivity(_ type: RecoveryActivityType) -> String {
+        switch type {
+        case .stretch: return "figure.flexibility"
+        case .rest: return "bed.double.fill"
+        case .mobility: return "figure.walk"
+        case .foam_roll: return "circle.grid.2x2.fill"
         }
     }
 }
@@ -288,10 +411,16 @@ struct AIRoutineCard: View {
         let supabase = SupabaseManager.shared.client
         
         do {
-            // Fetch all exercises to match names
+            guard let userId = try? await supabase.auth.session.user.id else {
+                print("User not authenticated")
+                return
+            }
+            
+            // Fetch global exercises and user's custom exercises with complete data
             let allExercises: [Exercise] = try await supabase
                 .from("exercises")
-                .select()
+                .select("*") // Fetch all fields including imageUrl, instructions, bodyPart, etc.
+                .or("is_global.eq.true,created_by_user_id.eq.\(userId)")
                 .execute()
                 .value
             
@@ -331,6 +460,8 @@ struct AIRoutineCard: View {
                     let setTemplates = (0..<match.aiInfo.sets).map { setIndex in
                         RoutineSetTemplateInput(
                             id: UUID(),
+                            routineExerciseId: UUID(), // Temporary UUID for AI-generated routines
+                            userId: UUID(), // Temporary UUID for AI-generated routines
                             setNumber: setIndex + 1,
                             targetReps: String(match.aiInfo.reps),
                             targetWeight: nil, // User will fill this in
@@ -340,8 +471,10 @@ struct AIRoutineCard: View {
                     
                     return RoutineExerciseDetailItem(
                         id: UUID(),
+                        routineId: UUID(), // Temporary UUID for AI-generated routines
                         exerciseId: match.exercise.id,
                         exerciseName: match.exercise.name,
+                        userId: UUID(), // Temporary UUID for AI-generated routines
                         orderIndex: index,
                         setTemplates: setTemplates
                     )
@@ -350,7 +483,9 @@ struct AIRoutineCard: View {
                 // Create a temporary routine
                 let tempRoutine = RoutineListItem(
                     id: UUID(),
+                    userId: UUID(), // Temporary UUID for AI-generated routines
                     name: routine.name,
+                    description: nil,
                     updatedAt: Date()
                 )
                 
@@ -409,10 +544,11 @@ struct AIRoutineCard: View {
                 return
             }
             
-            // Fetch exercises to match names
+            // Fetch complete exercise data to match names
             let allExercises: [Exercise] = try await supabase
                 .from("exercises")
-                .select()
+                .select("*") // Fetch all fields for complete exercise data
+                .or("is_global.eq.true,created_by_user_id.eq.\(userId)")
                 .execute()
                 .value
             
@@ -485,12 +621,8 @@ struct AIRoutineCard: View {
             
             print("Routine saved successfully!")
             
-            // Show success in chat
-            await MainActor.run {
-                Task {
-                    await viewModel.addMessage(.ai("Great! I've saved '\(routine.name)' to your routines. You can find it in the Routines tab."))
-                }
-            }
+            // Show success in chat - just dismiss for now
+            // The success will be shown when the user comes back
             
         } catch {
             print("Error saving routine: \(error)")

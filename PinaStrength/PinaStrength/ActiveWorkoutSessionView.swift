@@ -51,6 +51,10 @@ struct ActiveWorkoutSessionView: View {
     @State private var showSaveAsRoutinePrompt: Bool = false
     @State private var showRoutineEditor: Bool = false
     
+    // Exercise detail state
+    @State private var showExerciseDetail: Bool = false
+    @State private var selectedExerciseForDetail: Exercise? = nil
+    
     // Scroll management
     @State private var scrollTargetID: UUID? = nil
     @State private var isUserScrolling: Bool = false
@@ -116,6 +120,12 @@ struct ActiveWorkoutSessionView: View {
                     .zIndex(2)
                 }
             }
+            .background(
+                LinearGradient(
+                    gradient: Gradient(colors: [Color(.systemBackground),
+                                                Color(.systemGray6).opacity(0.3)]),
+                    startPoint: .top, endPoint: .bottom)
+            )
             .animation(.easeInOut(duration: 0.25), value: showRestCompleteToast)
             .animation(.easeInOut(duration: 0.25), value: showRestTimerKeyboard)
             .animation(.easeInOut(duration: 0.25), value: activeKeyboardInfo != nil)
@@ -225,6 +235,13 @@ struct ActiveWorkoutSessionView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showExerciseDetail) {
+                if let exercise = selectedExerciseForDetail {
+                    ExerciseDetailView(exercise: exercise)
+                        .presentationDetents([.medium, .large])
+                        .presentationDragIndicator(.visible)
+                }
+            }
         }
     }
 
@@ -257,7 +274,7 @@ struct ActiveWorkoutSessionView: View {
                     }) {
                         Image(systemName: "keyboard")
                             .font(.system(size: 20))
-                            .foregroundColor(showRestTimerKeyboard ? .blue : .secondary)
+                            .foregroundColor(showRestTimerKeyboard ? Color(hex: "#F28C28") : .secondary)
                             .padding(8)
                             .background(Circle().fill(Color(.secondarySystemBackground)))
                     }
@@ -312,7 +329,11 @@ struct ActiveWorkoutSessionView: View {
                         onAddSet: { addSet(for: exercise.id) },
                         onRequestKeyboard: { exId, setId, fieldType in requestKeyboard(exerciseId: exId, setId: setId, fieldType: fieldType) },
                         onToggleCompletion: { exId, setId in toggleSetCompletion(exerciseId: exId, setId: setId) },
-                        onFillFromPrevious: { exId, setId in fillSetFromPrevious(exerciseId: exId, setId: setId) }
+                        onFillFromPrevious: { exId, setId in fillSetFromPrevious(exerciseId: exId, setId: setId) },
+                        onShowExerciseDetail: { exercise in
+                            selectedExerciseForDetail = exercise
+                            showExerciseDetail = true
+                        }
                     )
                 }
                 Section { actionButtonsVStack } // Buttons at the end of the list
@@ -340,7 +361,7 @@ struct ActiveWorkoutSessionView: View {
         VStack {
             Button("Add Exercises") { isExercisePickerVisible = true }
                 .disabled(isFinishingWorkout)
-                .padding().frame(maxWidth: .infinity).background(Color.blue).foregroundColor(.white).cornerRadius(10)
+                .padding().frame(maxWidth: .infinity).background(Color(hex: "#F28C28")).foregroundColor(.white).cornerRadius(10)
             // Note: Cancel button is in toolbar now for full-screen context
         }.padding()
     }
@@ -651,47 +672,78 @@ struct ActiveWorkoutSessionView: View {
         var tempWorkoutSets: [UUID: [WorkoutSetInput]] = [:]
         var firstSetId: UUID? = nil
 
-        for exerciseDetail in items.sorted(by: { ($0.orderIndex ?? 0) < ($1.orderIndex ?? 0) }) {
-            // Assuming Exercise struct can be initialized with just id and name for this purpose.
-            // A more robust solution might fetch full Exercise details if needed.
-            let exercise = Exercise(id: exerciseDetail.exerciseId, name: exerciseDetail.exerciseName, bodyPart: nil, category: nil, equipment: nil, instructions: nil, createdByUser_id: nil, imageUrl: nil) 
-            tempSelectedExercises.append(exercise)
-            
-            var setsForThisExercise: [WorkoutSetInput] = []
-            for setTemplate in exerciseDetail.setTemplates.sorted(by: { ($0.setNumber ?? 0) < ($1.setNumber ?? 0) }) {
-                let newSet = WorkoutSetInput(
-                    weight: setTemplate.targetWeight ?? "",
-                    reps: setTemplate.targetReps ?? "",
-                    isCompleted: false // Start uncompleted
-                )
-                setsForThisExercise.append(newSet)
-                if firstSetId == nil {
-                    firstSetId = newSet.id
-                }
+        // Fetch complete exercise data from database
+        do {
+            guard let userId = try? await client.auth.session.user.id else {
+                print("User not authenticated")
+                isAddingExerciseToDb = false
+                return
             }
-            if setsForThisExercise.isEmpty { // Ensure at least one set if template had none
-                let defaultSet = WorkoutSetInput()
-                setsForThisExercise.append(defaultSet)
-                if firstSetId == nil {
-                    firstSetId = defaultSet.id
-                }
-            }
-            tempWorkoutSets[exercise.id] = setsForThisExercise
             
-            // Save this exercise to workout_exercises table & fetch previous performance
-            // These calls are async and will run sequentially per exercise here.
-            await addExerciseToCurrentWorkoutInDatabase(exercise: exercise)
-            await fetchPreviousPerformance(for: exercise.id)
-        }
+            // Get all exercise IDs we need to fetch
+            let exerciseIds = items.map { $0.exerciseId }
+            
+            // Fetch complete exercise data from database
+            let completeExercises: [Exercise] = try await client
+                .from("exercises")
+                .select("*") // Fetch all fields including imageUrl, instructions, bodyPart, etc.
+                .in("id", values: exerciseIds)
+                .execute()
+                .value
+            
+            // Create a lookup dictionary for quick access
+            let exerciseLookup = Dictionary(uniqueKeysWithValues: completeExercises.map { ($0.id, $0) })
 
-        // Update main state variables on the main thread
-        DispatchQueue.main.async {
-            self.selectedExercisesForWorkout = tempSelectedExercises
-            self.workoutSets = tempWorkoutSets
-            self.isAddingExerciseToDb = false
-            // Scroll to first set if routine was loaded
-            if let setId = firstSetId {
-                self.scrollTargetID = setId
+            for exerciseDetail in items.sorted(by: { ($0.orderIndex ?? 0) < ($1.orderIndex ?? 0) }) {
+                // Use complete exercise data from database instead of creating incomplete objects
+                guard let exercise = exerciseLookup[exerciseDetail.exerciseId] else {
+                    print("Warning: Could not find complete data for exercise ID: \(exerciseDetail.exerciseId)")
+                    continue
+                }
+                
+                tempSelectedExercises.append(exercise)
+                
+                var setsForThisExercise: [WorkoutSetInput] = []
+                for setTemplate in exerciseDetail.setTemplates.sorted(by: { ($0.setNumber ?? 0) < ($1.setNumber ?? 0) }) {
+                    let newSet = WorkoutSetInput(
+                        weight: setTemplate.targetWeight ?? "",
+                        reps: setTemplate.targetReps ?? "",
+                        isCompleted: false // Start uncompleted
+                    )
+                    setsForThisExercise.append(newSet)
+                    if firstSetId == nil {
+                        firstSetId = newSet.id
+                    }
+                }
+                if setsForThisExercise.isEmpty { // Ensure at least one set if template had none
+                    let defaultSet = WorkoutSetInput()
+                    setsForThisExercise.append(defaultSet)
+                    if firstSetId == nil {
+                        firstSetId = defaultSet.id
+                    }
+                }
+                tempWorkoutSets[exercise.id] = setsForThisExercise
+                
+                // Save this exercise to workout_exercises table & fetch previous performance
+                // These calls are async and will run sequentially per exercise here.
+                await addExerciseToCurrentWorkoutInDatabase(exercise: exercise)
+                await fetchPreviousPerformance(for: exercise.id)
+            }
+
+            // Update main state variables on the main thread
+            DispatchQueue.main.async {
+                self.selectedExercisesForWorkout = tempSelectedExercises
+                self.workoutSets = tempWorkoutSets
+                self.isAddingExerciseToDb = false
+                // Scroll to first set if routine was loaded
+                if let setId = firstSetId {
+                    self.scrollTargetID = setId
+                }
+            }
+        } catch {
+            print("Error fetching complete exercise data: \(error)")
+            DispatchQueue.main.async {
+                self.isAddingExerciseToDb = false
             }
         }
     }

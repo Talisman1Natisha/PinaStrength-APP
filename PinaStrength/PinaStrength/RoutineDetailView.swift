@@ -160,11 +160,18 @@ struct RoutineDetailView: View {
         errorMessage = nil
 
         do {
+            guard let userId = try? await client.auth.session.user.id else {
+                errorMessage = "User not authenticated"
+                isLoading = false
+                return
+            }
+            
             // 1. Fetch routine_exercises joined with exercises (for name)
             let routineExercisesData: [RoutineExerciseWithName] = try await client.database
                 .from("routine_exercises")
                 .select("id, exercise_id, order_index, exercises(name)") // Foreign key join
                 .eq("routine_id", value: routine.id)
+                .eq("user_id", value: userId)
                 .order("order_index", ascending: true)
                 .execute()
                 .value
@@ -176,8 +183,9 @@ struct RoutineDetailView: View {
                 let setTemplatesData: [RoutineSetTemplateInput] = try await client.database
                     .from("routine_exercise_sets")
                     // Ensure selected columns match RoutineSetTemplateInput or create a specific decoding struct
-                    .select("id, target_reps, target_weight, target_rest_seconds, set_number") 
+                    .select("id, routine_exercise_id, user_id, target_reps, target_weight, target_rest_seconds, set_number") 
                     .eq("routine_exercise_id", value: reData.id)
+                    .eq("user_id", value: userId)
                     .order("set_number", ascending: true)
                     .execute()
                     .value
@@ -188,8 +196,10 @@ struct RoutineDetailView: View {
                 
                 let detailItem = RoutineExerciseDetailItem(
                     id: reData.id,
+                    routineId: routine.id,
                     exerciseId: reData.exercise_id,
                     exerciseName: reData.exercises.name,
+                    userId: userId,
                     orderIndex: reData.order_index,
                     setTemplates: setTemplatesData
                 )
